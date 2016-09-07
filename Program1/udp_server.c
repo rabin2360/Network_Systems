@@ -14,26 +14,7 @@
 #include <string.h>
 /* You will have to modify the program below */
 
-#define MAXBUFSIZE 100
-
-void processLS()
-{
-  pid_t pid;
-  int pidStatus;
-  
-  pid = fork();
-
-  if(pid == 0)
-    {
-      char *argv[] = {"ls",0};
-      execvp(argv[0], argv);
-      printf("Command failed! What the fuck happened\n");
-    }
-  else if (pid < 0)
-    printf("Child process could not be created\n");
-  else
-    waitpid(pid, &pidStatus, 0);
-}
+#define MAXBUFSIZE 30000
 
 int main (int argc, char * argv[] )
 {
@@ -100,8 +81,24 @@ int main (int argc, char * argv[] )
 	  
 	  printf("The client says %s\n", buffer);
 
+	  //getting rid of the newline character
+	  char *pos;
 
-	  if(strcmp(buffer, "exit\n") == 0)
+	  if((pos = strchr(buffer, '\n'))!= NULL)
+	    *pos = '\0';
+	  
+	  char * tokens;
+	  int i = 0;
+	  char **tokenArray = malloc(MAXBUFSIZE *sizeof(char));
+	  tokens = strtok(buffer, " ");
+
+	  while(tokens !=NULL)
+	    {
+	      tokenArray[i++] = tokens;
+	      tokens = strtok(NULL," ");
+	    }
+
+	  if(strcmp(buffer, "exit") == 0)
 	    {
 	      strncpy(msg, "Bye bye!\n", MAXBUFSIZE);
 	      printf("%s",msg);
@@ -111,12 +108,14 @@ int main (int argc, char * argv[] )
 	  
 	      break;
 	    }
-	  else if(strcmp(buffer, "ls\n") == 0)
+	  else if(strcmp(buffer, "ls") == 0)
 	    {
 	      //processLS();
 
 	      FILE *fp;
-	      buffer[strlen(buffer)-1] = 0;
+	      int deleteFile;
+	      
+	      //buffer[strlen(buffer)-1] = 0;
 	      strcat(buffer,">file");
 	      //printf("Buffer: %s\n",buffer);
 
@@ -145,14 +144,59 @@ int main (int argc, char * argv[] )
 		  msg[i] = '\0';
 		  //printf("%s\n", msg);
 		  fclose(fp);
+
+		  //deleteFile = remove("file");
 		}
 	      //strncpy(msg, "ls", MAXBUFSIZE);
 	    }
-	  else if(strcmp(buffer, "get\n") == 0)
+	  else if(strcmp(tokenArray[0], "get") == 0)
 	    {
-	      strncpy(msg, "get", MAXBUFSIZE);
+	      printf("%s\n", tokenArray[0]);
+	      printf("%s\n", tokenArray[1]);
+	      
+	      FILE *fp = fopen(tokenArray[1],"r");
+	      char c;
+	      int i = 0;
+
+	      if(!fp)
+		{
+		  printf("No file found\n");
+		  break;
+		}
+	      
+	      //get the number of bytes
+	      long numbytes;
+	      fseek(fp, 0L, SEEK_END);
+	      numbytes = ftell(fp);
+
+	      //reset to the beginning of the file
+	      fseek(fp, 0L, SEEK_SET);
+
+	      char *fileBuf = (char*)calloc(numbytes, sizeof(char));
+
+	      if(fileBuf == NULL){
+		printf("error allocating\n");
+		break;
+	      }
+
+	     size_t readVals = fread(fileBuf, sizeof(char), numbytes, fp);
+	     printf("read %zu\n", readVals);
+	      fclose(fp);
+
+	      fp = fopen("testing", "w");
+
+	      if(!fp)
+		{
+		  printf("Error writing\n");
+		}
+
+	      size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
+	      printf("written %zu\n", writtenVals);
+	      fclose(fp);
+
+	       memcpy(msg, fileBuf, numbytes);
 	    }
-	  else if(strcmp(buffer, "post\n") == 0)
+	  else if(strcmp(buffer, "post") == 0)
 	    {
 	      strncpy(msg, "post", MAXBUFSIZE);
 	    }
@@ -161,11 +205,15 @@ int main (int argc, char * argv[] )
 	      strncpy(msg, "what!!!", MAXBUFSIZE);
 	    }
 
-	  
-	  nbytes = sendto(sock,msg,strlen(msg),0,(struct sockaddr *) &remote, remote_length);
-	  
-	  if(nbytes <  0)
-	  printf("Server: Error sending the message\n");
+	  	       nbytes = sendto(sock,msg,MAXBUFSIZE,0,(struct sockaddr *) &remote, remote_length);
+		       
+	  if(nbytes <  0){
+	    printf("Server: Error sending the message\n");
+	  }
+	  else
+	    {
+	      printf("Server: sent %d\n", nbytes);
+	    }
 	}
 	
 	close(sock);

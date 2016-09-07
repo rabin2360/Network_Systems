@@ -12,7 +12,7 @@
 #include <memory.h>
 #include <errno.h>
 
-#define MAXBUFSIZE 100
+#define MAXBUFSIZE 30000
 
 /* You will have to modify the program below */
 
@@ -83,10 +83,22 @@ int main (int argc, char * argv[])
 
 	if(nbytes < 0)
 	  printf("Client: Error receiving the message\n");
-	  // **** CALL RECVFROM() HERE ****;  
 
 	printf("Server says %s\n", buffer);
 
+	FILE *fp;
+	fp = fopen("testingClient", "w");
+
+	if(!fp)
+	{
+	   printf("Error writing\n");
+	}
+
+	size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
+	printf("written %zu\n", nbytes/sizeof(char));
+	      fclose(fp);
+
+	
 	if(strcmp(buffer, "Bye bye!\n")==0)
 	  {
 	    printf("Bye bye!\n");

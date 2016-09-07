@@ -5,5 +5,7 @@ foo2
 foo3
 makefile
 server
+testing
+testingClient
 udp_client.c
 udp_server.c
