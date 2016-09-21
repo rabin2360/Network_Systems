@@ -12,9 +12,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
-//#include "md5.h"
-
-/* You will have to modify the program below */
+#include "md5.h"
 
 #define MAXBUFSIZE 30000
 
@@ -236,23 +234,22 @@ int main (int argc, char * argv[] )
 	  printf("written output %zu\n", nbytes/sizeof(char));
 	  fclose(fp);
 
-	  	      //----md5
-	      /* struct md5_ctx ctx; */
-	      /* unsigned char digest[16]; */
+	  //ensuring that the file received is not corrupted
+	  char *calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));	  
+	  char *sentStrMd5 = (char*) malloc(33);
+	  
+	  nbytes = recvfrom(sock,sentStrMd5,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
-	      /* md5_init(&ctx); */
-	      /* ctx.size = nbytes/sizeof(char); */
-	      /* strcpy(ctx.buf, buffer); */
-	      /* md5_update(&ctx); */
-	      /* md5_final(digest, &ctx); */
-
-	      /* for(int i = 0; i<16; i++) */
-	      /* 	{ */
-	      /* 	  printf("%02x", digest[i]); */
-	      /* 	} */
-
-	      /* printf("\n"); */
-	      //----end-md5
+	  if (strncmp(calculatedStrMd5, sentStrMd5,32) ==0)
+	      printf("File not corrupted!\n");
+	  else
+	    {
+	      printf("File corrupted\n");
+	      printf("Client calculated md5 of the sent file: %s \n", sentStrMd5);
+	      printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
+	    }
+	  
+	  free(sentStrMd5);
 
       }
     else

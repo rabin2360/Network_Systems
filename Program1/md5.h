@@ -1,14 +1,9 @@
-#ifndef __MD5SUM_H__
-#define __MD5SUM_H__
+# if defined(__APPLE__)
+# define COMMON_DIGEST_FOR_OPENSSL
+# include <CommonCryto/CommonDigest.h>
+# define SHA1 CC_SHA1
+#else
+# include <openssl/md5.h>
+#endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <openssl/md5.h>
-
-#define BUFFER_SIZE 1024
-
-void md5sum(const char * const filename, unsigned char *sum);
-
-#endif /* __MD5SUM_H__ */
+extern char *str2md5(const char * str, int length);

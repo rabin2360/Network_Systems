@@ -11,11 +11,11 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <errno.h>
-//#include "md5.h"
+#include "md5.h"
+
 
 #define MAXBUFSIZE 30000
 
-/* You will have to modify the program below */
 
 int main (int argc, char * argv[])
 {
@@ -188,25 +188,9 @@ int main (int argc, char * argv[])
 		  printf("Client: Error sending the file\n");
 
 	      
-	      //----md5
-	      /* struct md5_ctx ctx; */
-	      /* unsigned char digest[16]; */
-
-	      /* md5_init(&ctx); */
-	      /* ctx.size = writtenVals; */
-	      /* strcpy(ctx.buf, fileBuf); */
-	      /* md5_update(&ctx); */
-	      /* md5_final(digest, &ctx); */
-
-	      /* for(int i = 0; i<16; i++) */
-	      /* 	{ */
-	      /* 	  printf("%02x", digest[i]); */
-	      /* 	} */
-
-	      /* printf("\n"); */
-	      //----end-md5
-
-
+	      char *strMd5 = str2md5(fileBuf, writtenVals);
+	      printf("%s\n", strMd5);
+	      nbytes = sendto(sock, strMd5, strlen(strMd5),0,(struct sockaddr *) &remote, remote_length);
 	    }
 
 	  else

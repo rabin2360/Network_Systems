@@ -10,10 +10,10 @@ CLEAN = rm -f $(EXE1) $(EXE2) *.o
 CFLAGS = -03 -Wall
 
 #target
-clientObj: udp_client.c #md5.h
-	gcc -o $(EXE1) udp_client.c #md5.c
+clientObj: udp_client.c md5.h
+	gcc -o $(EXE1) udp_client.c md5.c -lcrypto
 serverObj: udp_server.c #md5.h
-	gcc -o $(EXE2) udp_server.c #md5.c
+	gcc -o $(EXE2) udp_server.c md5.c -lcrypto
 
 clean:
 	$(CLEAN)
