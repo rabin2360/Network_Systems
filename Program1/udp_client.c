@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <errno.h>
+//#include "md5.h"
 
 #define MAXBUFSIZE 30000
 
@@ -64,6 +65,7 @@ int main (int argc, char * argv[])
   remote_length = sizeof(remote);
 
   while(1){
+
     //prompting the user
     printf("Please enter msg: ");
 
@@ -73,13 +75,11 @@ int main (int argc, char * argv[])
 
     remote_length = sizeof(remote);
     
- 
     printf("Client: command %s\n", command);
     nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
 
     if(nbytes <  0)
       printf("Client: Error sending the message\n");
-    //	}
 	  
     // Blocks till bytes are received
     struct sockaddr_in from_addr;
@@ -106,7 +106,7 @@ int main (int argc, char * argv[])
     if(nbytes < 0)
       printf("Client: Error receiving the message\n");
     else{
-      if(strcmp(buffer, "Bye bye!\n") == 0 || tokenArray[0] = "exit")
+      if(strcmp(tokenArray[0], "exit") == 0)
 	{
 	  printf("Bye bye!\n");
 	  break;
@@ -120,7 +120,7 @@ int main (int argc, char * argv[])
       else if(strcmp(tokenArray[0], "get") ==0)
 	{
 	  FILE *fp;
-	  fp = fopen("testingClient", "w");
+	  fp = fopen("clientReceived", "w");
 
 	  if(!fp)
 	    {
@@ -160,7 +160,7 @@ int main (int argc, char * argv[])
 	      char *fileBuf = (char*)calloc(numbytes, sizeof(char));
 
 	      if(fileBuf == NULL){
-		printf("error allocating. Try again!\n");
+		printf("error allocating file buffer to read. Try again!\n");
 		continue;
 	      }
 
@@ -168,6 +168,7 @@ int main (int argc, char * argv[])
 	      printf("read %zu\n", readVals);
 	      fclose(fp);
 
+	      //---- for debugging purposes-----
 	      fp = fopen("sendingToServer", "w");
 
 	      if(!fp)
@@ -178,12 +179,33 @@ int main (int argc, char * argv[])
 	      size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
 	      printf("written %zu\n", writtenVals);
 	      fclose(fp);
+	      //---- for debugging purposes-----
 
 	      memcpy(buffer, fileBuf, numbytes);
-	      nbytes = sendto(sock, buffer, numbytes,0,(struct sockaddr *) &remote, remote_length);
+	      nbytes = sendto(sock, fileBuf, numbytes,0,(struct sockaddr *) &remote, remote_length);
 
 	      if(nbytes <  0)
 		  printf("Client: Error sending the file\n");
+
+	      
+	      //----md5
+	      /* struct md5_ctx ctx; */
+	      /* unsigned char digest[16]; */
+
+	      /* md5_init(&ctx); */
+	      /* ctx.size = writtenVals; */
+	      /* strcpy(ctx.buf, fileBuf); */
+	      /* md5_update(&ctx); */
+	      /* md5_final(digest, &ctx); */
+
+	      /* for(int i = 0; i<16; i++) */
+	      /* 	{ */
+	      /* 	  printf("%02x", digest[i]); */
+	      /* 	} */
+
+	      /* printf("\n"); */
+	      //----end-md5
+
 
 	    }
 
@@ -193,7 +215,7 @@ int main (int argc, char * argv[])
 
       else
 	{
-	  printf("No idea what you said\n");
+	  printf("No idea what you said %s\n", tokenArray[0]);
 	}
 	
     }//else statement for reading the number of bytes received

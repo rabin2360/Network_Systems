@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+//#include "md5.h"
+
 /* You will have to modify the program below */
 
 #define MAXBUFSIZE 30000
@@ -71,22 +73,12 @@ int main (int argc, char * argv[] )
 	  
   while(1){
 
-    //waits for an incoming message
+    //resetting the buffers whenever needed
     bzero(buffer,sizeof(buffer));
     bzero(msg, MAXBUFSIZE);
 	
     nbytes = recvfrom(sock,buffer,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
-    /*if(strcmp(buffer, "ls") != 0 && strcmp(buffer, "exit") !=0 && strcmp(buffer, "get")!=0)
-      {
-	printf("Catch what I need\n");
-      }
-    else
-      {
-	printf("%s\n", buffer);
-      }
-    */
-    
     if(nbytes < 0)
       printf("Server: Error receiving the message\n");
 
@@ -108,7 +100,7 @@ int main (int argc, char * argv[] )
 
     if(strcmp(tokenArray[0], "exit") == 0)
       {
-	strncpy(msg, "Bye bye!\n", MAXBUFSIZE);
+	strncpy(msg, "Server signing off!\n", MAXBUFSIZE);
 	printf("%s",msg);
 	nbytes = sendto(sock,msg,strlen(msg),0,(struct sockaddr *) &remote, remote_length);
 
@@ -119,14 +111,10 @@ int main (int argc, char * argv[] )
       }
     else if(strcmp(tokenArray[0], "ls") == 0)
       {
-	//processLS();
-
 	FILE *fp;
 	int deleteFile;
 	      
-	//buffer[strlen(buffer)-1] = 0;
 	strcat(buffer,">file");
-	//printf("Buffer: %s\n",buffer);
 
 	pid_t pid = vfork();
 	int status = 0;
@@ -147,6 +135,12 @@ int main (int argc, char * argv[] )
 	    //open file and send it to the child
 	    fp = fopen("file", "r");
 
+	    long numbytes;
+	    fseek(fp, 0L, SEEK_END);
+	    numbytes = ftell(fp);
+
+	    fseek(fp, 0L, SEEK_SET);
+	    
 	    while((c=getc(fp))!=EOF)
 	      msg[i++] = c;
 
@@ -155,6 +149,9 @@ int main (int argc, char * argv[] )
 	    fclose(fp);
 
 	    //deleteFile = remove("file");
+	        //change the buffer size
+	    nbytes = sendto(sock,msg,numbytes,0,(struct sockaddr *) &remote, remote_length);
+
 	  }
 	//strncpy(msg, "ls", MAXBUFSIZE);
       }
@@ -192,6 +189,7 @@ int main (int argc, char * argv[] )
 	printf("read %zu\n", readVals);
 	fclose(fp);
 
+	//****debugging
 	fp = fopen("sendingToClient", "w");
 
 	if(!fp)
@@ -202,8 +200,13 @@ int main (int argc, char * argv[] )
 	size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
 	printf("written %zu\n", writtenVals);
 	fclose(fp);
-
+	//*****bebugging******
+	
 	memcpy(msg, fileBuf, numbytes);
+	    //change the buffer size
+
+	nbytes = sendto(sock,msg,numbytes,0,(struct sockaddr *) &remote, remote_length);
+
       }
     else if(strcmp(buffer, "post") == 0)
       {
@@ -215,11 +218,11 @@ int main (int argc, char * argv[] )
 	  printf("Server: Error sending the ready message\n");
 
 	//receiving the file
-	bzero(buffer,sizeof(buffer));
+	bzero(buffer,sizeof(MAXBUFSIZE));
 	nbytes = recvfrom(sock,buffer,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
          if(nbytes <  0)
-	 printf("Server: Error receiving the file\n");
+	   printf("Server: Error receiving the file\n");
 
 	  FILE *fp;
 	  fp = fopen("postedFile", "w");
@@ -230,15 +233,35 @@ int main (int argc, char * argv[] )
 	    }
 
 	  size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
-	  printf("written %zu\n", nbytes/sizeof(char));
+	  printf("written output %zu\n", nbytes/sizeof(char));
 	  fclose(fp);
+
+	  	      //----md5
+	      /* struct md5_ctx ctx; */
+	      /* unsigned char digest[16]; */
+
+	      /* md5_init(&ctx); */
+	      /* ctx.size = nbytes/sizeof(char); */
+	      /* strcpy(ctx.buf, buffer); */
+	      /* md5_update(&ctx); */
+	      /* md5_final(digest, &ctx); */
+
+	      /* for(int i = 0; i<16; i++) */
+	      /* 	{ */
+	      /* 	  printf("%02x", digest[i]); */
+	      /* 	} */
+
+	      /* printf("\n"); */
+	      //----end-md5
+
       }
     else
       {
 	strncpy(msg, "what!!!", MAXBUFSIZE);
       }
 
-    nbytes = sendto(sock,msg,MAXBUFSIZE,0,(struct sockaddr *) &remote, remote_length);
+    //change the buffer size
+    //nbytes = sendto(sock,msg,MAXBUFSIZE,0,(struct sockaddr *) &remote, remote_length);
 		       
     if(nbytes <  0){
       printf("Server: Error sending the message\n");

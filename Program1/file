@@ -4,8 +4,13 @@ foo1
 foo2
 foo3
 makefile
+md5.c
+md5.c~
+md5.h
+postedFile
+sendingToClient
+sendingToServer
 server
-testing
 testingClient
 udp_client.c
 udp_server.c
