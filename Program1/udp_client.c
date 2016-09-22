@@ -72,20 +72,11 @@ int main (int argc, char * argv[])
     //resetting the buffer
     bzero(command, MAXBUFSIZE);
     fgets(command, MAXBUFSIZE, stdin);
-
     remote_length = sizeof(remote);
-    
-    printf("Client: command %s\n", command);
-    nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
 
-    if(nbytes <  0)
-      printf("Client: Error sending the message\n");
-	  
-    // Blocks till bytes are received
-    struct sockaddr_in from_addr;
-    int addr_length = sizeof(struct sockaddr);
-    bzero(buffer,sizeof(buffer));
-    nbytes = recvfrom(sock, buffer, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+    //DEBUG
+    printf("Client: command %s\n", command);
+
 
     //interpreting the input
     char *pos;
@@ -102,6 +93,32 @@ int main (int argc, char * argv[])
 	tokenArray[i++] = tokens;
 	tokens = strtok(NULL," ");
       }
+
+    //for post commands, check if the file exists before doing anything else
+    if(strcmp(tokenArray[0],"post")==0)
+      {
+	      FILE *fp = fopen(tokenArray[1],"r");
+	      char c;
+	      int i = 0;
+
+	      if(!fp)
+		{
+		  printf("ERROR: File not found in the local directory. Please check your local directory.\n");
+		  continue;
+		}
+      }
+    
+    nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
+
+    if(nbytes <  0)
+      printf("Client: Error sending the message\n");
+	  
+    // Blocks till bytes are received
+    struct sockaddr_in from_addr;
+    int addr_length = sizeof(struct sockaddr);
+    bzero(buffer,sizeof(buffer));
+    nbytes = recvfrom(sock, buffer, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+
 
     if(nbytes < 0)
       printf("Client: Error receiving the message\n");
@@ -162,6 +179,7 @@ int main (int argc, char * argv[])
 	{
 	  if(strcmp(buffer, "ready") ==0)
 	    {
+	      //DEBUG
 	      printf("%s\n", tokenArray[0]);
 	      printf("%s\n", tokenArray[1]);
 	      
@@ -171,7 +189,7 @@ int main (int argc, char * argv[])
 
 	      if(!fp)
 		{
-		  printf("ERROR: File not found in the local directory\n");
+		  printf("ERROR: File not found in the local directory. Please check your local directory.\n");
 		  continue;
 		}
 	      
