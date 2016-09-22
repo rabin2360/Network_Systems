@@ -3,6 +3,7 @@
 #include <string.h>
 #include "md5.h"
 
+
 //Info source: http://stackoverflow.com/questions/7627723/how-to-create-a-md5-hash-of-a-string-in-c
 char *str2md5(const char * str, int length)
 {
@@ -32,5 +33,26 @@ char *str2md5(const char * str, int length)
     }
 
   return out;
+}
+
+char ** tokenize(char * command)
+{
+    char *pos;
+    if((pos = strchr(command, '\n'))!= NULL)
+      *pos = '\0';
+	  
+    char * tokens;
+    int i = 0;
+    char **tokenArray = malloc(MAXBUFSIZE *sizeof(char));
+    tokens = strtok(command, " ");
+
+    while(tokens !=NULL)
+      {
+	tokenArray[i++] = tokens;
+	tokens = strtok(NULL," ");
+      }
+
+   return tokenArray;
+
 }
 

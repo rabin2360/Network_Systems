@@ -47,11 +47,8 @@ int main (int argc, char * argv[])
   //Causes the system to create a generic socket of type UDP (datagram)
   if ((sock = socket(AF_INET, SOCK_DGRAM,IPPROTO_UDP) ) < 0)
     {
-      printf("unable to create socket");
-    }
-  else
-    {
-      printf("socket created\n");
+      printf("Error: Unable to create socket");
+      exit(1);
     }
 
   /******************
@@ -61,7 +58,8 @@ int main (int argc, char * argv[])
   ******************/
 
   char command[MAXBUFSIZE];
-	
+  char tempBuffer[MAXBUFSIZE];
+  
   remote_length = sizeof(remote);
 
   while(1){
@@ -74,44 +72,31 @@ int main (int argc, char * argv[])
     fgets(command, MAXBUFSIZE, stdin);
     remote_length = sizeof(remote);
 
-    //DEBUG
-    printf("Client: command %s\n", command);
-
-
-    //interpreting the input
-    char *pos;
-    if((pos = strchr(command, '\n'))!= NULL)
-      *pos = '\0';
-	  
-    char * tokens;
-    int i = 0;
     char **tokenArray = malloc(MAXBUFSIZE *sizeof(char));
-    tokens = strtok(command, " ");
-
-    while(tokens !=NULL)
-      {
-	tokenArray[i++] = tokens;
-	tokens = strtok(NULL," ");
-      }
-
+    memcpy(tempBuffer, command, MAXBUFSIZE);  
+    tokenArray = tokenize(tempBuffer);
+    
     //for post commands, check if the file exists before doing anything else
     if(strcmp(tokenArray[0],"post")==0)
       {
-	      FILE *fp = fopen(tokenArray[1],"r");
-	      char c;
-	      int i = 0;
+	FILE *fp = fopen(tokenArray[1],"r");
+	char c;
+	int i = 0;
 
-	      if(!fp)
-		{
-		  printf("ERROR: File not found in the local directory. Please check your local directory.\n");
-		  continue;
-		}
+	if(!fp)
+	  {
+	    printf("ERROR: File not found in the local directory. Please check your local directory.\n");
+	    continue;
+	  }
       }
+
+     printf("Client: command %s\n", command);
     
+    //contact the server with the message
     nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
 
     if(nbytes <  0)
-      printf("Client: Error sending the message\n");
+      printf("ERROR: Error sending the message %s\n", command);
 	  
     // Blocks till bytes are received
     struct sockaddr_in from_addr;
@@ -119,10 +104,10 @@ int main (int argc, char * argv[])
     bzero(buffer,sizeof(buffer));
     nbytes = recvfrom(sock, buffer, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
 
-
     if(nbytes < 0)
-      printf("Client: Error receiving the message\n");
+      printf("ERROR: Error receiving the message\n");
     else{
+
       if(strcmp(tokenArray[0], "exit") == 0)
 	{
 	  printf("Bye bye!\n");
@@ -140,37 +125,37 @@ int main (int argc, char * argv[])
 	  fp = fopen("clientReceived", "w");
 
 	  if(!fp)
-	    {
-	      printf("Error writing\n");
-	    }
+	    printf("Error writing\n");
 
+	  //server can't find the file
 	  if(strcmp(buffer, "error")==0)
 	    {
 	      printf("No such file or folder. Please check the name you've entered!\n");
 	      continue;
 	    }
-	  else{
-	  size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
-	  printf("written %zu\n", nbytes/sizeof(char));
-	  fclose(fp);
-
-	  //calcuate the md5 of the file received
-	  char * calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));
-
-	  //waiting to receive the md5 for the file downloaded
-	  char * receivedStrMd5 = (char *) malloc(33);
-	  nbytes = recvfrom(sock, receivedStrMd5, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
-
-	  if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
-	      printf("File not corrupted!\n");
-	  else
-	    {
-	      printf("File corrupted\n");
-	      printf("Client calculated md5 of the sent file: %s \n", receivedStrMd5);
-	      printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
-	    }
 	  
-	  free(receivedStrMd5);
+	  else{
+	    size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
+	    //printf("written %zu\n", nbytes/sizeof(char));
+	    fclose(fp);
+
+	    //calcuate the md5 of the file received
+	    char * calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));
+
+	    //waiting to receive the md5 for the file downloaded
+	    char * receivedStrMd5 = (char *) malloc(33);
+	    nbytes = recvfrom(sock, receivedStrMd5, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+
+	    if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
+	      printf("File not corrupted!\n");
+	    else
+	      {
+		printf("File corrupted\n");
+		printf("Client calculated md5 of the sent file: %s \n", receivedStrMd5);
+		printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
+	      }
+	  
+	    free(receivedStrMd5);
 
 	  }
 	}
@@ -180,8 +165,8 @@ int main (int argc, char * argv[])
 	  if(strcmp(buffer, "ready") ==0)
 	    {
 	      //DEBUG
-	      printf("%s\n", tokenArray[0]);
-	      printf("%s\n", tokenArray[1]);
+	      //printf("%s\n", tokenArray[0]);
+	      //printf("%s\n", tokenArray[1]);
 	      
 	      FILE *fp = fopen(tokenArray[1],"r");
 	      char c;
@@ -204,24 +189,22 @@ int main (int argc, char * argv[])
 	      char *fileBuf = (char*)calloc(numbytes, sizeof(char));
 
 	      if(fileBuf == NULL){
-		printf("error allocating file buffer to read. Try again!\n");
+		printf("ERROR: Cannot allocate buffer to read file. Try again!\n");
 		continue;
 	      }
 
 	      size_t readVals = fread(fileBuf, sizeof(char), numbytes, fp);
-	      printf("read %zu\n", readVals);
+	      //printf("read %zu\n", readVals);
 	      fclose(fp);
 
 	      //---- for debugging purposes-----
 	      fp = fopen("sendingToServer", "w");
 
 	      if(!fp)
-		{
 		  printf("Client: Error writing\n");
-		}
 
 	      size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
-	      printf("written %zu\n", writtenVals);
+	      //printf("written %zu\n", writtenVals);
 	      fclose(fp);
 	      //---- for debugging purposes-----
 
@@ -229,8 +212,7 @@ int main (int argc, char * argv[])
 	      nbytes = sendto(sock, fileBuf, numbytes,0,(struct sockaddr *) &remote, remote_length);
 
 	      if(nbytes <  0)
-		  printf("Client: Error sending the file\n");
-
+		printf("Client: Error sending the file\n");
 	      
 	      char *strMd5 = str2md5(fileBuf, writtenVals);
 	      printf("%s\n", strMd5);
@@ -238,12 +220,12 @@ int main (int argc, char * argv[])
 	    }
 
 	  else
-	    printf("Client: Error sending file to the server!\n");
+	    printf("ERROR: Error sending file to the server!\n");
 	}
 
       else
 	{
-	  printf("No idea what you said %s\n", tokenArray[0]);
+	  printf("ERROR: Command not recognized %s\n", tokenArray[0]);
 	}
 	
     }//else statement for reading the number of bytes received
