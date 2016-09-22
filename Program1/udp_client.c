@@ -127,9 +127,35 @@ int main (int argc, char * argv[])
 	      printf("Error writing\n");
 	    }
 
+	  if(strcmp(buffer, "error")==0)
+	    {
+	      printf("No such file or folder. Please check the name you've entered!\n");
+	      continue;
+	    }
+	  else{
 	  size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
 	  printf("written %zu\n", nbytes/sizeof(char));
 	  fclose(fp);
+
+	  //calcuate the md5 of the file received
+	  char * calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));
+
+	  //waiting to receive the md5 for the file downloaded
+	  char * receivedStrMd5 = (char *) malloc(33);
+	  nbytes = recvfrom(sock, receivedStrMd5, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+
+	  if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
+	      printf("File not corrupted!\n");
+	  else
+	    {
+	      printf("File corrupted\n");
+	      printf("Client calculated md5 of the sent file: %s \n", receivedStrMd5);
+	      printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
+	    }
+	  
+	  free(receivedStrMd5);
+
+	  }
 	}
 
       else if(strcmp(tokenArray[0], "post") == 0)

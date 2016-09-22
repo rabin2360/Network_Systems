@@ -15,6 +15,7 @@
 #include "md5.h"
 
 #define MAXBUFSIZE 30000
+#define STRMAX 100
 
 int main (int argc, char * argv[] )
 {
@@ -165,6 +166,12 @@ int main (int argc, char * argv[] )
 	if(!fp)
 	  {
 	    printf("ERROR: File not found in the local directory\n");
+
+	    //send the error message
+	    strncpy(msg, "error", STRMAX);
+	    printf("%zu\n", strlen(msg));
+	    nbytes = sendto(sock,msg,strlen(msg),0,(struct sockaddr *) &remote, remote_length);
+
 	    continue;
 	  }
 	      
@@ -179,7 +186,7 @@ int main (int argc, char * argv[] )
 	char *fileBuf = (char*)calloc(numbytes, sizeof(char));
 
 	if(fileBuf == NULL){
-	  printf("error allocating. Try again!\n");
+	  printf("Error: error allocating. Try again!\n");
 	  continue;
 	}
 
@@ -203,8 +210,15 @@ int main (int argc, char * argv[] )
 	memcpy(msg, fileBuf, numbytes);
 	    //change the buffer size
 
+	//send the file
 	nbytes = sendto(sock,msg,numbytes,0,(struct sockaddr *) &remote, remote_length);
 
+	//send the calculated md5
+	char * calculatedMd5 = str2md5(msg, numbytes);
+	printf("%s\n", calculatedMd5);
+	nbytes = sendto(sock, calculatedMd5, strlen(calculatedMd5), 0, (struct sockaddr *) & remote, remote_length);
+	
+	
       }
     else if(strcmp(buffer, "post") == 0)
       {
@@ -236,20 +250,20 @@ int main (int argc, char * argv[] )
 
 	  //ensuring that the file received is not corrupted
 	  char *calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));	  
-	  char *sentStrMd5 = (char*) malloc(33);
+	  char *receivedStrMd5 = (char*) malloc(33);
 	  
-	  nbytes = recvfrom(sock,sentStrMd5,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
+	  nbytes = recvfrom(sock,receivedStrMd5,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
-	  if (strncmp(calculatedStrMd5, sentStrMd5,32) ==0)
+	  if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
 	      printf("File not corrupted!\n");
 	  else
 	    {
 	      printf("File corrupted\n");
-	      printf("Client calculated md5 of the sent file: %s \n", sentStrMd5);
+	      printf("Client calculated md5 of the sent file: %s \n", receivedStrMd5);
 	      printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
 	    }
 	  
-	  free(sentStrMd5);
+	  free(receivedStrMd5);
 
       }
     else
