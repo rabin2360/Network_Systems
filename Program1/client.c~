@@ -113,7 +113,6 @@ int main (int argc, char * argv[])
       else if(strcmp(tokenArray[0], "get") ==0)
 	{
 
-	  printf("tokenArray[1] %s\n", tokenArray[1]);
 	  int deleteFile;
 	  FILE *fp;
 

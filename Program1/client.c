@@ -63,7 +63,7 @@ int main (int argc, char * argv[])
     
     memcpy(tempBuffer, command, MAXBUFSIZE);  
     tokenArray = tokenize(tempBuffer);
-    
+
     //for post commands, check if the file exists before doing anything else
     if(strcmp(tokenArray[0],"post")==0)
       {
@@ -113,7 +113,12 @@ int main (int argc, char * argv[])
       else if(strcmp(tokenArray[0], "get") ==0)
 	{
 
-	  printf("tokenArray[1] %s\n", tokenArray[1]);
+	  if(tokenArray[1] == NULL)
+	    {
+	      printf("Please enter the name of the file\n");
+	      continue;
+	    }
+	  
 	  int deleteFile;
 	  FILE *fp;
 
@@ -165,6 +170,13 @@ int main (int argc, char * argv[])
 
       else if(strcmp(tokenArray[0], "post") == 0)
 	{
+
+	  if(tokenArray[1] == NULL)
+	    {
+	      printf("Please enter the name of the file %s\n",tokenArray[1]);
+	      continue;
+	    }
+	  
 	  if(strcmp(buffer, "ready") ==0)
 	    {
 	      FILE *fp = fopen(tokenArray[1],"r");

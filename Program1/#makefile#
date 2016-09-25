@@ -6,33 +6,14 @@ all: client server
 
 CLEAN = rm -f $(EXE1) $(EXE2) *.o
 
-#flags
-CFLAGS = -03 -Wall
-LDFLAGS = -lcrypto
-
-SRC := udp_server.c
-
-MD5_SRC := md5.c
-MD5_OBJ := $(MD5_SRC:.c=.o)
-
 TARGET := $(SRC:.c=)
 
-.PHONY: all clean
+#target
+client: client.c md5.h
+	gcc -o $(EXE1) client.c md5.c -lcrypto
 
-client: client.o md5sum.o
-	gcc -o $@ $^ $(LDFLAGS)
-
-server: server.o md5sum.o
-	gcc -o $@ $^ $(LDFLAGS)
-
-server.o: server.c
-	gcc -c $^
-
-client.o: client.c
-	gcc -c $^
-
-md5sum.o: md5.c md5.h
-	gcc -c $^
+server: server.c md5.h
+	gcc -o $(EXE2) server.c md5.c -lcrypto
 
 clean:
 	$(CLEAN)
