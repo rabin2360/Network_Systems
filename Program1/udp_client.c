@@ -34,11 +34,6 @@ int main (int argc, char * argv[])
       exit(1);
     }
 
-  /******************
-	  Here we populate a sockaddr_in struct with
-	  information regarding where we'd like to send our packet 
-	  i.e the Server.
-  ******************/
   bzero(&remote,sizeof(remote));               //zero the struct
   remote.sin_family = AF_INET;                 //address family
   remote.sin_port = htons(atoi(argv[2]));      //sets port to network byte order
@@ -51,15 +46,8 @@ int main (int argc, char * argv[])
       exit(1);
     }
 
-  /******************
-	  sendto() sends immediately.  
-	  it will report an error if the message fails to leave the computer
-	  however, with UDP, there is no error if the message is lost in the network once it leaves the computer.
-  ******************/
-
   char command[MAXBUFSIZE];
   char tempBuffer[MAXBUFSIZE];
-  
   remote_length = sizeof(remote);
 
   while(1){
@@ -73,6 +61,8 @@ int main (int argc, char * argv[])
     remote_length = sizeof(remote);
 
     char **tokenArray = malloc(MAXBUFSIZE *sizeof(char));
+    bzero(tokenArray, MAXBUFSIZE * sizeof(char));
+    
     memcpy(tempBuffer, command, MAXBUFSIZE);  
     tokenArray = tokenize(tempBuffer);
     
@@ -90,19 +80,24 @@ int main (int argc, char * argv[])
 	  }
       }
 
-     printf("Client: command %s\n", command);
+    //printf("Client: command %s\n", tokenArray[0]);
     
-    //contact the server with the message
-    nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
-
-    if(nbytes <  0)
-      printf("ERROR: Error sending the message %s\n", command);
+    //check if the message is valid before contacting server
+    if(strcmp(tokenArray[0], "exit") == 0 ||
+       strcmp(tokenArray[0], "ls") == 0 ||
+       strcmp(tokenArray[0], "post") == 0 ||
+       strcmp(tokenArray[0], "get") == 0)
+      {
+	nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
+        if(nbytes <  0)
+	  printf("ERROR: Error sending the message %s\n", command);
 	  
-    // Blocks till bytes are received
-    struct sockaddr_in from_addr;
-    int addr_length = sizeof(struct sockaddr);
-    bzero(buffer,sizeof(buffer));
-    nbytes = recvfrom(sock, buffer, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+	// Blocks till bytes are received
+	struct sockaddr_in from_addr;
+	int addr_length = sizeof(struct sockaddr);
+	bzero(buffer,sizeof(buffer));
+	nbytes = recvfrom(sock, buffer, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
+      }
 
     if(nbytes < 0)
       printf("ERROR: Error receiving the message\n");
@@ -122,7 +117,12 @@ int main (int argc, char * argv[])
       else if(strcmp(tokenArray[0], "get") ==0)
 	{
 	  FILE *fp;
-	  fp = fopen("clientReceived", "w");
+
+	  char * filename = malloc(strlen(tokenArray[1])+strlen(".clientReceived"));
+	  strcpy(filename, tokenArray[1]);
+	  strcat(filename, ".clientReceived");
+	  
+	  fp = fopen(filename, "w");
 
 	  if(!fp)
 	    printf("Error writing\n");
@@ -130,7 +130,7 @@ int main (int argc, char * argv[])
 	  //server can't find the file
 	  if(strcmp(buffer, "error")==0)
 	    {
-	      printf("No such file or folder. Please check the name you've entered!\n");
+	      printf("No such file or folder in the server. Please check the name you've entered!\n");
 	      continue;
 	    }
 	  
@@ -139,6 +139,8 @@ int main (int argc, char * argv[])
 	    //printf("written %zu\n", nbytes/sizeof(char));
 	    fclose(fp);
 
+	    printf("Downloading file from the server...\n");
+	    
 	    //calcuate the md5 of the file received
 	    char * calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));
 
@@ -197,25 +199,19 @@ int main (int argc, char * argv[])
 	      //printf("read %zu\n", readVals);
 	      fclose(fp);
 
-	      //---- for debugging purposes-----
-	      fp = fopen("sendingToServer", "w");
-
-	      if(!fp)
-		  printf("Client: Error writing\n");
-
-	      size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
-	      //printf("written %zu\n", writtenVals);
-	      fclose(fp);
-	      //---- for debugging purposes-----
-
+	      printf("Uploading %s to the server...\n", tokenArray[1]);
+	    
 	      memcpy(buffer, fileBuf, numbytes);
+
+	      
+	      
 	      nbytes = sendto(sock, fileBuf, numbytes,0,(struct sockaddr *) &remote, remote_length);
 
 	      if(nbytes <  0)
 		printf("Client: Error sending the file\n");
 	      
-	      char *strMd5 = str2md5(fileBuf, writtenVals);
-	      printf("%s\n", strMd5);
+	      char *strMd5 = str2md5(fileBuf, numbytes/sizeof(char));
+	      //printf("%s\n", strMd5);
 	      nbytes = sendto(sock, strMd5, strlen(strMd5),0,(struct sockaddr *) &remote, remote_length);
 	    }
 
@@ -225,7 +221,7 @@ int main (int argc, char * argv[])
 
       else
 	{
-	  printf("ERROR: Command not recognized %s\n", tokenArray[0]);
+	  printf("ERROR: Command not recognized - %s\n", tokenArray[0]);
 	}
 	
     }//else statement for reading the number of bytes received

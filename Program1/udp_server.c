@@ -114,6 +114,9 @@ int main (int argc, char * argv[] )
 	    //open file and send it to the child
 	    fp = fopen("file", "r");
 
+	    if(!fp)
+	      printf("Error: opening the implicit file\n");
+	    
 	    long numbytes;
 	    fseek(fp, 0L, SEEK_END);
 	    numbytes = ftell(fp);
@@ -127,7 +130,7 @@ int main (int argc, char * argv[] )
 	    //printf("%s\n", msg);
 	    fclose(fp);
 
-	    //deleteFile = remove("file");
+	    deleteFile = remove("file");
 	        //change the buffer size
 	    nbytes = sendto(sock,msg,numbytes,0,(struct sockaddr *) &remote, remote_length);
 
@@ -173,17 +176,19 @@ int main (int argc, char * argv[] )
 	fclose(fp);
 
 	//****debugging
-	fp = fopen("sendingToClient", "w");
+	/* fp = fopen("sendingToClient", "w"); */
 
-	if(!fp)
-	  {
-	    printf("ERROR: Error writing to the file.\n");
-	  }
+	/* if(!fp) */
+	/*   { */
+	/*     printf("ERROR: Error writing to the file.\n"); */
+	/*   } */
 
-	size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp);
-	//printf("written %zu\n", writtenVals);
-	fclose(fp);
+	/* size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp); */
+	/* //printf("written %zu\n", writtenVals); */
+	/* fclose(fp); */
 	//*****bebugging******
+
+	printf("Sending %s to the client...\n",tokenArray[1]);
 	
 	memcpy(msg, fileBuf, numbytes);
 	//send the file
@@ -198,6 +203,13 @@ int main (int argc, char * argv[] )
       }
     else if(strcmp(buffer, "post") == 0)
       {
+	printf("Receiving %s to the server...\n", tokenArray[1]);
+
+	
+	  char * filename = malloc(strlen(tokenArray[1])+strlen(".serverReceived"));
+	  strcpy(filename, tokenArray[1]);
+	  strcat(filename, ".serverReceived");
+
 	strncpy(msg, "ready", MAXBUFSIZE);
 
 	nbytes = sendto(sock,msg,MAXBUFSIZE,0,(struct sockaddr *) &remote, remote_length);
@@ -213,7 +225,7 @@ int main (int argc, char * argv[] )
 	   printf("ERROR: Error receiving the file\n");
 
 	  FILE *fp;
-	  fp = fopen("postedFile", "w");
+	  fp = fopen(filename, "w");
 
 	  if(!fp)
 	    {
