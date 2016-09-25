@@ -1,3 +1,10 @@
+/******
+ Name: Rabin Ranabhat
+ Program 1
+ CSCI 5273
+ File: server.c 
+ ******/
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
