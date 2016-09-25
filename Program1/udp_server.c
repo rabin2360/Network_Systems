@@ -31,10 +31,7 @@ int main (int argc, char * argv[] )
       exit(1);
     }
 
-  /******************
-	  This code populates the sockaddr_in struct with
-	  the information about our socket
-  ******************/
+
   bzero(&sin,sizeof(sin));                    //zero the struct
   sin.sin_family = AF_INET;                   //address family
   sin.sin_port = htons(atoi(argv[1]));        //htons() sets the port # to network byte order
@@ -48,14 +45,14 @@ int main (int argc, char * argv[] )
       exit(1);
     }
 
-  /******************
-	  Once we've created a socket, we must bind that socket to the 
-	  local address and port we've supplied in the sockaddr_in struct
-  ******************/
   if (bind(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
     {
       printf("ERROR: Unable to bind socket.\n");
       exit(1);
+    }
+  else
+    {
+      printf("MSG: Server successfully started!\n");
     }
 
 
@@ -67,12 +64,14 @@ int main (int argc, char * argv[] )
     //resetting the buffers whenever needed
     bzero(buffer,sizeof(buffer));
     bzero(msg, MAXBUFSIZE);
-	
+
+    //receiving message from client
     nbytes = recvfrom(sock,buffer,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
     if(nbytes < 0)
       printf("ERROR: Error receiving the message\n");
 
+    
     char **tokenArray = malloc(MAXBUFSIZE *sizeof(char));
     tokenArray = tokenize(buffer);
 
@@ -81,9 +80,8 @@ int main (int argc, char * argv[] )
 	strncpy(msg, "MSG: Server signing off!\n", MAXBUFSIZE);
 	printf("%s",msg);
 	nbytes = sendto(sock,msg,strlen(msg),0,(struct sockaddr *) &remote, remote_length);
-
 	if(nbytes < 0)
-	  printf("ERROR: Error killing server. Try again!\n");
+	  printf("ERROR: Error sending sign off message to the client!\n");
 	  
 	break;
       }
@@ -91,9 +89,8 @@ int main (int argc, char * argv[] )
       {
 	FILE *fp;
 	int deleteFile;
-	      
+	
 	strcat(buffer,">file");
-
 	pid_t pid = vfork();
 	int status = 0;
 
@@ -127,15 +124,12 @@ int main (int argc, char * argv[] )
 	      msg[i++] = c;
 
 	    msg[i] = '\0';
-	    //printf("%s\n", msg);
 	    fclose(fp);
 
 	    deleteFile = remove("file");
-	        //change the buffer size
+	    //change the buffer size
 	    nbytes = sendto(sock,msg,numbytes,0,(struct sockaddr *) &remote, remote_length);
-
 	  }
-	//strncpy(msg, "ls", MAXBUFSIZE);
       }
     else if(strcmp(tokenArray[0], "get") == 0)
       {
@@ -172,23 +166,9 @@ int main (int argc, char * argv[] )
 	}
 
 	size_t readVals = fread(fileBuf, sizeof(char), numbytes, fp);
-	//printf("read %zu\n", readVals);
 	fclose(fp);
 
-	//****debugging
-	/* fp = fopen("sendingToClient", "w"); */
-
-	/* if(!fp) */
-	/*   { */
-	/*     printf("ERROR: Error writing to the file.\n"); */
-	/*   } */
-
-	/* size_t writtenVals = fwrite(fileBuf, sizeof(char),numbytes,fp); */
-	/* //printf("written %zu\n", writtenVals); */
-	/* fclose(fp); */
-	//*****bebugging******
-
-	printf("Sending %s to the client...\n",tokenArray[1]);
+	printf("MSG: Sending %s to the client...\n",tokenArray[1]);
 	
 	memcpy(msg, fileBuf, numbytes);
 	//send the file
@@ -196,15 +176,11 @@ int main (int argc, char * argv[] )
 
 	//send the calculated md5
 	char * calculatedMd5 = str2md5(msg, numbytes);
-	//printf("%s\n", calculatedMd5);
 	nbytes = sendto(sock, calculatedMd5, strlen(calculatedMd5), 0, (struct sockaddr *) & remote, remote_length);
-	
-	
       }
     else if(strcmp(buffer, "post") == 0)
       {
 	printf("Receiving %s to the server...\n", tokenArray[1]);
-
 	
 	  char * filename = malloc(strlen(tokenArray[1])+strlen(".serverReceived"));
 	  strcpy(filename, tokenArray[1]);
@@ -215,7 +191,7 @@ int main (int argc, char * argv[] )
 	nbytes = sendto(sock,msg,MAXBUFSIZE,0,(struct sockaddr *) &remote, remote_length);
 		       
 	if(nbytes <  0)
-	  printf("ERROR: Error sending the ready message\n");
+	  printf("ERROR: Error sending the ready message! Post cannot be completed.\n");
 
 	//receiving the file
 	bzero(buffer,sizeof(MAXBUFSIZE));
@@ -229,11 +205,10 @@ int main (int argc, char * argv[] )
 
 	  if(!fp)
 	    {
-	      printf("ERROR: Error writing\n");
+	      printf("ERROR: Error writing the received file. Please try post again!\n");
 	    }
 
 	  size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
-	  //printf("written output %zu\n", nbytes/sizeof(char));
 	  fclose(fp);
 
 	  //ensuring that the file received is not corrupted
@@ -243,7 +218,7 @@ int main (int argc, char * argv[] )
 	  nbytes = recvfrom(sock,receivedStrMd5,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
 
 	  if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
-	      printf("File not corrupted!\n");
+	      printf("MSG: File not corrupted!\n");
 	  else
 	    {
 	      printf("ERROR: File corrupted\n");

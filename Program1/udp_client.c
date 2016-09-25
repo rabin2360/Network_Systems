@@ -13,9 +13,7 @@
 #include <errno.h>
 #include "md5.h"
 
-
 #define MAXBUFSIZE 30000
-
 
 int main (int argc, char * argv[])
 {
@@ -80,8 +78,6 @@ int main (int argc, char * argv[])
 	  }
       }
 
-    //printf("Client: command %s\n", tokenArray[0]);
-    
     //check if the message is valid before contacting server
     if(strcmp(tokenArray[0], "exit") == 0 ||
        strcmp(tokenArray[0], "ls") == 0 ||
@@ -105,17 +101,19 @@ int main (int argc, char * argv[])
 
       if(strcmp(tokenArray[0], "exit") == 0)
 	{
-	  printf("Bye bye!\n");
+	  printf("MSG: Bye bye!\n");
 	  break;
 	}
 
       else if(strcmp(tokenArray[0], "ls")==0)
 	{
-	  printf("Server says %s\n", buffer);     
+	  printf("MSG: Server says %s\n", buffer);     
 	}
 
       else if(strcmp(tokenArray[0], "get") ==0)
 	{
+
+	  int deleteFile;
 	  FILE *fp;
 
 	  char * filename = malloc(strlen(tokenArray[1])+strlen(".clientReceived"));
@@ -130,16 +128,18 @@ int main (int argc, char * argv[])
 	  //server can't find the file
 	  if(strcmp(buffer, "error")==0)
 	    {
-	      printf("No such file or folder in the server. Please check the name you've entered!\n");
+	      fclose(fp);
+	      deleteFile = remove(filename);
+	      
+	      printf("MSG: No such file or folder in the server. Please check the name you've entered!\n");
 	      continue;
 	    }
 	  
 	  else{
 	    size_t writtenVals = fwrite(buffer, sizeof(char),nbytes/sizeof(char),fp);
-	    //printf("written %zu\n", nbytes/sizeof(char));
 	    fclose(fp);
 
-	    printf("Downloading file from the server...\n");
+	    printf("MSG: Downloading file from the server...\n");
 	    
 	    //calcuate the md5 of the file received
 	    char * calculatedStrMd5 = str2md5(buffer, nbytes/sizeof(char));
@@ -149,12 +149,12 @@ int main (int argc, char * argv[])
 	    nbytes = recvfrom(sock, receivedStrMd5, MAXBUFSIZE,0, (struct sockaddr *)&remote,&remote_length);
 
 	    if (strncmp(calculatedStrMd5, receivedStrMd5,32) ==0)
-	      printf("File not corrupted!\n");
+	      printf("MSG: File not corrupted!\n");
 	    else
 	      {
-		printf("File corrupted\n");
-		printf("Client calculated md5 of the sent file: %s \n", receivedStrMd5);
-		printf("Server calculated md5 of the received file: %s\n", calculatedStrMd5);
+		printf("MSG: File corrupted\n");
+		printf("MSG: Client calculated md5 of the sent file: %s \n", receivedStrMd5);
+		printf("MSG: Server calculated md5 of the received file: %s\n", calculatedStrMd5);
 	      }
 	  
 	    free(receivedStrMd5);
@@ -166,10 +166,6 @@ int main (int argc, char * argv[])
 	{
 	  if(strcmp(buffer, "ready") ==0)
 	    {
-	      //DEBUG
-	      //printf("%s\n", tokenArray[0]);
-	      //printf("%s\n", tokenArray[1]);
-	      
 	      FILE *fp = fopen(tokenArray[1],"r");
 	      char c;
 	      int i = 0;
@@ -199,19 +195,16 @@ int main (int argc, char * argv[])
 	      //printf("read %zu\n", readVals);
 	      fclose(fp);
 
-	      printf("Uploading %s to the server...\n", tokenArray[1]);
+	      printf("MSG: Uploading %s to the server...\n", tokenArray[1]);
 	    
 	      memcpy(buffer, fileBuf, numbytes);
 
-	      
-	      
 	      nbytes = sendto(sock, fileBuf, numbytes,0,(struct sockaddr *) &remote, remote_length);
 
 	      if(nbytes <  0)
-		printf("Client: Error sending the file\n");
+		printf("ERROR: Error sending the file to the server. Try again!\n");
 	      
 	      char *strMd5 = str2md5(fileBuf, numbytes/sizeof(char));
-	      //printf("%s\n", strMd5);
 	      nbytes = sendto(sock, strMd5, strlen(strMd5),0,(struct sockaddr *) &remote, remote_length);
 	    }
 
