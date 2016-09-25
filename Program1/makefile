@@ -2,17 +2,17 @@ CC = gcc
 EXE1 = client
 EXE2 = server
 
-all: clientObj serverObj
+all: client server
 
 CLEAN = rm -f $(EXE1) $(EXE2) *.o
 
-#flags
-CFLAGS = -03 -Wall
+TARGET := $(SRC:.c=)
 
 #target
-clientObj: udp_client.c md5.h
+client: udp_client.c md5.h
 	gcc -o $(EXE1) udp_client.c md5.c -lcrypto
-serverObj: udp_server.c #md5.h
+
+server: udp_server.c md5.h
 	gcc -o $(EXE2) udp_server.c md5.c -lcrypto
 
 clean:

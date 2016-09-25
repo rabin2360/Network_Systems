@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #include "md5.h"
 
 #define MAXBUFSIZE 30000
