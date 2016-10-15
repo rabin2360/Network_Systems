@@ -375,7 +375,7 @@ void parseServerConfFile(char * fileLocation)
     printf("directory index %s\n", directoryIndexes[0]);
     printf("directory index %s\n", directoryIndexes[1]);
     printf("directory index %s\n", directoryIndexes[2]);
-  */
+  
     int i;
     for(int i = 0; i<SUPPORTED_CONTENT_TYPES; i++)
     {
@@ -383,6 +383,7 @@ void parseServerConfFile(char * fileLocation)
        printf("%s\n", contentType[i]);
    
     }
+  */
   
 }
 
