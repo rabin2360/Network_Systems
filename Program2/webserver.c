@@ -39,7 +39,8 @@ char * getExtensionOfFile(char * filepath)
 char * getContentType(char * extension)
 {
   char * content_type = malloc(READ_BUFFER);
-
+  content_type = "false";
+  
   int i = 0;
 
   for(i; i<SUPPORTED_CONTENT_TYPES; i++)
@@ -54,6 +55,139 @@ char * getContentType(char * extension)
   return content_type;
 }
 
+void error501Message(int connfd, char * notSupported)
+{
+  char *errorMessage = malloc(100);
+  strcpy(errorMessage, "<html><body>ERROR: 501. Not Implemented Support For:");
+  strcat(errorMessage, notSupported);
+  strcat(errorMessage, "</body></html>\n"); 
+
+  char *contentHeader;
+  contentHeader = malloc(50);
+  strcpy(contentHeader, "Content-Type: ");
+  strcat(contentHeader, "text/html");
+  strcat(contentHeader, "\n");
+
+     
+  //printf("%s\n", pageNotFound);
+
+  int lengthOfMessage = strlen(errorMessage);
+  char strLengthOfMessage[20];
+
+  sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+  char *lengthOfContent;
+  lengthOfContent = malloc(50);
+  strcpy(lengthOfContent, "Content-Length: ");
+  strcat(lengthOfContent, strLengthOfMessage);
+  strcat(lengthOfContent, "\n");
+  int lengthOfContentLength = strlen(lengthOfContent);
+
+      
+  send(connfd, "HTTP/1.1 501 Not Implemented\n",29,0);
+  send(connfd, contentHeader, strlen(contentHeader),0);
+  send(connfd, lengthOfContent, lengthOfContentLength, 0);
+  send(connfd, "Connection: keep-alive\n\n",24,0);
+  send(connfd, errorMessage, lengthOfMessage, 0);
+
+      
+  shutdown(connfd, SHUT_RDWR);
+  close(connfd);
+}
+
+void error404Message(int connfd, char * urlEntered)
+{
+      char *contentHeader;
+      contentHeader = malloc(50);
+      strcpy(contentHeader, "Content-Type: ");
+      strcat(contentHeader, "text/html");
+      strcat(contentHeader, "\n");
+
+      char * strPortNumber = malloc(10);
+      sprintf(strPortNumber, "%d", portNumber);
+      
+      char *pageNotFound = malloc(100);
+      strcpy(pageNotFound, "<html><body>ERROR: 404. Not Found Reason URL does not exist: http://localhost:");
+      strcat(pageNotFound, strPortNumber);
+      strcat(pageNotFound, urlEntered);
+      strcat(pageNotFound, "</body></html>\n");
+      //printf("%s\n", pageNotFound);
+
+      int lengthOfMessage = strlen(pageNotFound);
+      char strLengthOfMessage[20];
+
+      sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+      char *lengthOfContent;
+      lengthOfContent = malloc(50);
+      strcpy(lengthOfContent, "Content-Length: ");
+      strcat(lengthOfContent, strLengthOfMessage);
+      strcat(lengthOfContent, "\n");
+      int lengthOfContentLength = strlen(lengthOfContent);
+
+      
+      send(connfd, "HTTP/1.1 404 Not Found\n",23,0);
+      send(connfd, contentHeader, strlen(contentHeader),0);
+      send(connfd, lengthOfContent, lengthOfContentLength, 0);
+      send(connfd, "Connection: keep-alive\n\n",24,0);
+      send(connfd, pageNotFound, lengthOfMessage, 0);
+}
+
+void error400Message(int connfd, char * errorType, char * message)
+{
+  char *errorMessage = malloc(150);
+
+  if(strncmp(errorType, "filepath",8)==0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL:");
+    }
+  else if(strncmp(errorType, "httpversion",11)==0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version: ");
+    }
+  else if(strncmp(errorType, "httpinc", 7) == 0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version incomplete: ");
+    }
+  else if(strncmp(errorType, "invalidurl", 7) == 0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL: ");
+    }
+  
+  strcat(errorMessage, message);
+  strcat(errorMessage, " </body></html>\n"); 
+
+  char *contentHeader;
+  contentHeader = malloc(50);
+  strcpy(contentHeader, "Content-Type: ");
+  strcat(contentHeader, "text/html");
+  strcat(contentHeader, "\n");
+  //printf("%s\n", pageNotFound);
+
+  int lengthOfMessage = strlen(errorMessage);
+  char strLengthOfMessage[20];
+
+  sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+  char *lengthOfContent;
+  lengthOfContent = malloc(50);
+  strcpy(lengthOfContent, "Content-Length: ");
+  strcat(lengthOfContent, strLengthOfMessage);
+  strcat(lengthOfContent, "\n");
+  int lengthOfContentLength = strlen(lengthOfContent);
+
+      
+  send(connfd, "HTTP/1.1 400 Bad Request\n",25,0);
+  send(connfd, contentHeader, strlen(contentHeader),0);
+  send(connfd, lengthOfContent, lengthOfContentLength, 0);
+  send(connfd, "Connection: keep-alive\n\n",24,0);
+  send(connfd, errorMessage, lengthOfMessage, 0);
+
+      
+  shutdown(connfd, SHUT_RDWR);
+  close(connfd);
+}
+
 void getProcessing(char * message, int connfd)
 {
   //request type
@@ -65,15 +199,35 @@ void getProcessing(char * message, int connfd)
   //www - file path
   tokens = strtok(NULL, " \n");
 
+  //when file path in the received message is null
+  if(tokens == NULL)
+    {
+      printf("ERROR: Filepath is null\n");
+      error400Message(connfd, "filepath", "null");
+      return;
+    }
+  //this gets called when it's just a space for file name
+  /*else
+    {
+      error400Message(connfd, "filepath", "null");
+      return;
+    }
+  */
+  
   char * filepath;
+  char * urlEntered;
   if(strlen(tokens) != 1)
     {
+      urlEntered = malloc(strlen(tokens));
+      strncpy(urlEntered, tokens, strlen(tokens));
+      
       filepath = malloc(strlen(tokens)+3);
       strncpy(filepath, "www", 3);
       strcat(filepath, tokens);
     }
-    else
+  else if (strlen(tokens) == 1)
       {
+	printf("%s\n", tokens);
 	filepath = "www/index.html";
       }
 
@@ -82,10 +236,27 @@ void getProcessing(char * message, int connfd)
       filepath = "www/index.html";
     }
 
-  printf("File path %s, length: %d\n", filepath, strlen(filepath));
+  printf("File path %s\n", filepath);
 
   //http version
   tokens = strtok(NULL, " \n");
+
+  //check if it's null
+  if(tokens == NULL)
+    {
+      printf("ERROR: HTTP is null\n");
+      error400Message(connfd, "httpversion", "null");
+      return;
+    }
+  
+  //check if the received message is incomplete
+  else if(strlen(tokens)!=9)
+    {
+      printf("ERROR: Incomplete HTTP %zu\n", strlen(tokens));
+      error400Message(connfd, "httpinc", tokens);
+      return;
+    }
+  
   char * httpVersion = malloc(strlen(tokens));
   strncpy(httpVersion, tokens, strlen(tokens));
   printf("HTTP Version %s\n\n", httpVersion);
@@ -94,16 +265,28 @@ void getProcessing(char * message, int connfd)
   if(strncmp(httpVersion, "HTTP/1.1",8) != 0 && strncmp(httpVersion, "HTTP/1.0",8) != 0)
     {
       printf("ERROR: Not supported http version -%s\n", httpVersion);
+      error501Message(connfd,httpVersion);
       //call for not supported http version method here
       return;
     }
-
+  
   //get content type, need the string after the last occurence of . in the filepath
   char * fileExtension = getExtensionOfFile(filepath);
 
+  if(fileExtension == NULL)
+    {
+      error400Message(connfd, "invalidurl", filepath);
+    }
+  
   //search the array for the file extension and get content type
   char * contentType = getContentType(fileExtension);
 
+  if(strncmp(contentType, "false", 5) == 0)
+    {
+      error501Message(connfd, fileExtension);
+      return;
+    }
+  
   //get the file
   int indexFd = open(filepath,O_RDONLY);
 
@@ -143,54 +326,12 @@ void getProcessing(char * message, int connfd)
   else
     {
       printf("ERROR: File not found %s\n", filepath);
-
-      /*char *not_found_str;
-	not_found_str = malloc(80);
-	strcpy(not_found_str, "HTTP/1.1 404 Not Found: ");
-	strcat(not_found_str, filepath);
-	strcat(not_found_str, "\n");
-
-	int not_found_strlen = strlen(not_found_str);
-	write(connfd, not_found_str, not_found_strlen); //file not found, send 404 error
-      */
-      
-      char *contentHeader;
-      contentHeader = malloc(50);
-      strcpy(contentHeader, "Content-Type: ");
-      strcat(contentHeader, "text/html");
-      strcat(contentHeader, "\n");
-
-      char *pageNotFound = "<html><body>ERROR: 404, Rabin says Not Found Reason URL does not exit</body></html>";
-      int lengthOfMessage = strlen(pageNotFound);
-      char strLengthOfMessage[20];
-
-      sprintf(strLengthOfMessage, "%d", lengthOfMessage);
-      
-      char *lengthOfContent;
-      lengthOfContent = malloc(50);
-      strcpy(lengthOfContent, "Content-Length: ");
-      strcat(lengthOfContent, strLengthOfMessage);
-      strcat(lengthOfContent, "\n");
-      int lengthOfContentLength = strlen(lengthOfContent);
-
-      
-      send(connfd, "HTTP/1.1 404 Not Found\n",23,0);
-      send(connfd, contentHeader, strlen(contentHeader),0);
-      send(connfd, lengthOfContent, lengthOfContentLength, 0);
-      send(connfd, "Connection: keep-alive\n\n",24,0);
-
-      send(connfd, pageNotFound, lengthOfMessage, 0);
-      //call method here to say file not found in the server
-      //*/
-      //return;
-    }
-
+      error404Message(connfd, urlEntered);
+     }
+  
   shutdown(connfd, SHUT_RDWR);
   close(connfd);
   close(indexFd);
-
-  
-  //printf("GET processing:\n %s\n", message);
 
 }
 
@@ -271,56 +412,30 @@ void runServer()
 	strcpy(tempString, buf);
 	
 	char * getPostTag = strtok(tempString, " \n");
-	  
-	if(strncmp(getPostTag, "GET", 3)==0)
+
+	if(n < 0)
+	  {
+	    printf("ERROR: invalid message received\n");
+	  }
+	else if(strncmp(getPostTag, "GET", 3)==0)
 	  {
 	    //do GET processing
 	    getProcessing(buf, connfd);
 	  }
-	else
+	else if(strncmp(getPostTag, "POST", 4) == 0)
 	  {
-	    perror("ERROR: Message received is not a GET request\n");
+	    printf("ERROR: POST is not a GET request\n");
+	    error501Message(connfd, getPostTag);
 	  }
 	
-	//printf("buf has this: %s\n", buf);
-
-	/*
-	int indexFd = open("/home/rabin/Documents/Network_Systems/Program2/www/index.html",O_RDONLY);
-
-	if(indexFd  != -1)
+	else
 	  {
-	    char *contentHeader;
-	    contentHeader = malloc(50);
-	    strcpy(contentHeader, "Content-Type: ");
-	    strcat(contentHeader, "text/html\n");
-
-	    int contentHeaderLength = strlen(contentHeader);
-
-	    int sizeOfFile = lseek(indexFd, 0, SEEK_END);
-	    lseek(indexFd,0, SEEK_SET);
-	    char fileSizeStr[20];
-	    sprintf(fileSizeStr, "%d", sizeOfFile);
-
-	    char *lengthOfContent;
-	    lengthOfContent = malloc(50);
-	    strcpy(lengthOfContent, "Content-Length: ");
-	    strcat(lengthOfContent, fileSizeStr);
-	    strcat(lengthOfContent, "\n");
-	    int lengthOfContentLength = strlen(lengthOfContent);
-
-	    send(connfd, "HTTP/1.1 200 OK\n",16,0);
-	    send(connfd, contentHeader, contentHeaderLength, 0);
-	    send(connfd, lengthOfContent, lengthOfContentLength, 0);
-	    send(connfd, "Connection: keep-alive\n\n",24,0);
-
-	    int bytesRead;
-	    char *indexDataToSend = malloc(READ_BUFFER);
-	    while((bytesRead = read(indexFd, indexDataToSend, READ_BUFFER))>0)
-	      write(connfd, indexDataToSend, bytesRead);
-
-	    close(indexFd);
+	    printf("ERROR: request is not supproted: %s, %zu\n", getPostTag, strlen(getPostTag));
+	    error501Message(connfd, getPostTag);
 	  }
-	*/
+
+	printf("%s\n", buf);
+	
       }
 
       if (n < 0)
