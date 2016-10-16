@@ -8,7 +8,7 @@
 #include <fcntl.h>
 
 #define MAXLINE 4096 /*max text line length*/
-#define LISTENQ 8 /*maximum number of client connections*/
+#define LISTENQ 100 /*maximum number of client connections*/
 #define READ_BUFFER 1024
 #define DIRECTORY_INDEX_SIZE 3
 #define SUPPORTED_CONTENT_TYPES 9
@@ -22,6 +22,7 @@ char *directoryIndexes[DIRECTORY_INDEX_SIZE];
 char *contentType[SUPPORTED_CONTENT_TYPES];
 char *extensionType[SUPPORTED_CONTENT_TYPES];
 
+//from the file path gets the extension of the file being requested
 char * getExtensionOfFile(char * filepath)
 {
   char * extension;
@@ -34,6 +35,7 @@ char * getExtensionOfFile(char * filepath)
   return extension;
 }
 
+//gets the content type for the response based on the file extension
 char * getContentType(char * extension)
 {
   char * content_type = malloc(READ_BUFFER);
@@ -42,8 +44,6 @@ char * getContentType(char * extension)
 
   for(i; i<SUPPORTED_CONTENT_TYPES; i++)
     {
-      //printf("OUTSIDE %d, %s, %s\n", strlen(extension), extension, contentType[i]);
-      
       if(strncmp(extension, extensionType[i], strlen(extension))==0)
 	{
 	  content_type = contentType[i];
@@ -66,31 +66,30 @@ void getProcessing(char * message, int connfd)
   tokens = strtok(NULL, " \n");
 
   char * filepath;
-  if(strlen(tokens) != 1){
+  if(strlen(tokens) != 1)
+    {
       filepath = malloc(strlen(tokens)+3);
       strncpy(filepath, "www", 3);
       strcat(filepath, tokens);
-      printf("File path %s, length: %d\n", filepath, strlen(filepath));
     }
     else
       {
 	filepath = "www/index.html";
-	printf("File path %s\n", filepath);
       }
 
   if(strncmp(filepath, "www/index.htm",13) == 0)
     {
       filepath = "www/index.html";
-      printf("File path %s \n", filepath);
     }
-  
+
+  printf("File path %s, length: %d\n", filepath, strlen(filepath));
+
   //http version
   tokens = strtok(NULL, " \n");
   char * httpVersion = malloc(strlen(tokens));
   strncpy(httpVersion, tokens, strlen(tokens));
   printf("HTTP Version %s\n\n", httpVersion);
   
-
   //check http version
   if(strncmp(httpVersion, "HTTP/1.1",8) != 0 && strncmp(httpVersion, "HTTP/1.0",8) != 0)
     {
@@ -135,20 +134,59 @@ void getProcessing(char * message, int connfd)
 	send(connfd, contentHeader, contentHeaderLength, 0);
 	send(connfd, lengthOfContent, lengthOfContentLength, 0);
 	send(connfd, "Connection: keep-alive\n\n",24,0);
-	    
-	    
+
 	int bytesRead;
 	char *indexDataToSend = malloc(READ_BUFFER);
 	while((bytesRead = read(indexFd, indexDataToSend, READ_BUFFER))>0)
-	write(connfd, indexDataToSend, bytesRead);
+	  send(connfd, indexDataToSend, bytesRead,0);
     }
   else
     {
       printf("ERROR: File not found %s\n", filepath);
+
+      /*char *not_found_str;
+	not_found_str = malloc(80);
+	strcpy(not_found_str, "HTTP/1.1 404 Not Found: ");
+	strcat(not_found_str, filepath);
+	strcat(not_found_str, "\n");
+
+	int not_found_strlen = strlen(not_found_str);
+	write(connfd, not_found_str, not_found_strlen); //file not found, send 404 error
+      */
+      
+      char *contentHeader;
+      contentHeader = malloc(50);
+      strcpy(contentHeader, "Content-Type: ");
+      strcat(contentHeader, "text/html");
+      strcat(contentHeader, "\n");
+
+      char *pageNotFound = "<html><body>ERROR: 404, Rabin says Not Found Reason URL does not exit</body></html>";
+      int lengthOfMessage = strlen(pageNotFound);
+      char strLengthOfMessage[20];
+
+      sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+      char *lengthOfContent;
+      lengthOfContent = malloc(50);
+      strcpy(lengthOfContent, "Content-Length: ");
+      strcat(lengthOfContent, strLengthOfMessage);
+      strcat(lengthOfContent, "\n");
+      int lengthOfContentLength = strlen(lengthOfContent);
+
+      
+      send(connfd, "HTTP/1.1 404 Not Found\n",23,0);
+      send(connfd, contentHeader, strlen(contentHeader),0);
+      send(connfd, lengthOfContent, lengthOfContentLength, 0);
+      send(connfd, "Connection: keep-alive\n\n",24,0);
+
+      send(connfd, pageNotFound, lengthOfMessage, 0);
       //call method here to say file not found in the server
-      return;
+      //*/
+      //return;
     }
 
+  shutdown(connfd, SHUT_RDWR);
+  close(connfd);
   close(indexFd);
 
   
@@ -288,7 +326,7 @@ void runServer()
       if (n < 0)
 	printf("ERROR: Error receiving the client request.\n");
 
-      exit(0);
+      exit(EXIT_SUCCESS);
     }
     //close socket of the server
     close(connfd);
@@ -328,6 +366,12 @@ void parseServerConfFile(char * fileLocation)
 		{
 		  tokens = strtok(NULL, " \n");
 		  portNumber = atoi(tokens);
+
+		  if(portNumber<1024)
+		    {
+		      printf("ERROR: Cannot use port numbers less than 1024. Please check ws.conf file!\n");
+		      exit(EXIT_FAILURE);
+		    }
 		}
 	      else if(strcmp(tokens, "DocumentRoot")==0)
 		{
@@ -365,7 +409,7 @@ void parseServerConfFile(char * fileLocation)
   else
     {
       printf("ERROR: Cannot read the web configuration file - ws.conf. Please check the local directory.\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
 
   //DEBUG
@@ -396,5 +440,5 @@ int main (int argc, char **argv)
   //run server
   runServer();
   
-
+  exit(EXIT_SUCCESS);
 }
