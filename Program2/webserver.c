@@ -12,6 +12,7 @@
 #define READ_BUFFER 1024
 #define DIRECTORY_INDEX_SIZE 3
 #define SUPPORTED_CONTENT_TYPES 9
+#define MAX_KEY_VALUE_PAIR 100
 
 #define SERVER_CONF_FILE "ws.conf"
 
@@ -27,11 +28,15 @@ char * getExtensionOfFile(char * filepath)
 {
   char * extension;
   const char ch = '.';
-
   extension = strrchr(filepath, ch);
 
-  printf("extension %s\n", extension);
-
+  //if str length is 1, then only '.' found and noting else found after it.
+  //return null to indicate that extension is invalid
+  if(extension != NULL && strlen(extension) == 1)
+    {
+      extension = NULL;
+    }
+  
   return extension;
 }
 
@@ -55,6 +60,144 @@ char * getContentType(char * extension)
   return content_type;
 }
 
+//error 400 thrown when there is a bad request.
+//reasons can be - invalid method i.e. instead of GET, only GE
+//invalid url - bad get url supplied like asdf, index instead of /index.html
+//invalid http version - instead of HTTP/1.0, received GET request only has HTTP or HTTTTTP
+void error400Message(int connfd, char * errorType, char * message)
+{
+  char *errorMessage = malloc(150);
+
+  if(strncmp(errorType, "filepath",8)==0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL:");
+    }
+  else if(strncmp(errorType, "httpversion",11)==0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version: ");
+    }
+  else if(strncmp(errorType, "httpinc", 7) == 0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version incomplete: ");
+    }
+  else if(strncmp(errorType, "invalidurl", 10) == 0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL: ");
+    }
+  else if(strncmp(errorType, "invalidmethod",13) == 0)
+    {
+      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid Method: ");
+    }
+  
+  strcat(errorMessage, message);
+  strcat(errorMessage, " </body></html>\n"); 
+
+  char *contentHeader;
+  contentHeader = malloc(50);
+  strcpy(contentHeader, "Content-Type: ");
+  strcat(contentHeader, "text/html");
+  strcat(contentHeader, "\n");
+
+  int lengthOfMessage = strlen(errorMessage);
+  char strLengthOfMessage[20];
+
+  sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+  char *lengthOfContent;
+  lengthOfContent = malloc(50);
+  strcpy(lengthOfContent, "Content-Length: ");
+  strcat(lengthOfContent, strLengthOfMessage);
+  strcat(lengthOfContent, "\n");
+  int lengthOfContentLength = strlen(lengthOfContent);
+
+  send(connfd, "HTTP/1.1 400 Bad Request\n",25,0);
+  send(connfd, contentHeader, strlen(contentHeader),0);
+  send(connfd, lengthOfContent, lengthOfContentLength, 0);
+  send(connfd, "Connection: keep-alive\n\n",24,0);
+  send(connfd, errorMessage, lengthOfMessage, 0);
+
+  //shut down the session since client got an error message
+  shutdown(connfd, SHUT_RDWR);
+  close(connfd);
+}
+
+//error 404 thrown when the page being looked up is not found in the www/ folder
+void error404Message(int connfd, char * urlEntered)
+{
+      char *contentHeader;
+      contentHeader = malloc(50);
+      strcpy(contentHeader, "Content-Type: ");
+      strcat(contentHeader, "text/html");
+      strcat(contentHeader, "\n");
+
+      char * strPortNumber = malloc(10);
+      sprintf(strPortNumber, "%d", portNumber);
+      
+      char *pageNotFound = malloc(100);
+      strcpy(pageNotFound, "<html><body>ERROR: 404. Not Found Reason URL does not exist: http://localhost:");
+      strcat(pageNotFound, strPortNumber);
+      strcat(pageNotFound, urlEntered);
+      strcat(pageNotFound, "</body></html>\n");
+
+      int lengthOfMessage = strlen(pageNotFound);
+      char strLengthOfMessage[20];
+
+      sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+      char *lengthOfContent;
+      lengthOfContent = malloc(50);
+      strcpy(lengthOfContent, "Content-Length: ");
+      strcat(lengthOfContent, strLengthOfMessage);
+      strcat(lengthOfContent, "\n");
+      int lengthOfContentLength = strlen(lengthOfContent);
+
+      send(connfd, "HTTP/1.1 404 Not Found\n",23,0);
+      send(connfd, contentHeader, strlen(contentHeader),0);
+      send(connfd, lengthOfContent, lengthOfContentLength, 0);
+      send(connfd, "Connection: keep-alive\n\n",24,0);
+      send(connfd, pageNotFound, lengthOfMessage, 0);
+
+      //close session? check in the caller method
+}
+
+void error500Message(int connfd)
+{
+  char *errorMessage = malloc(100);
+  strcpy(errorMessage, "<html><body>E500: Internal Error: server cannot allocate memory.</html></body>");
+	 
+  char *contentHeader;
+  contentHeader = malloc(50);
+  strcpy(contentHeader, "Content-Type: ");
+  strcat(contentHeader, "text/html");
+  strcat(contentHeader, "\n");
+  
+  int lengthOfMessage = strlen(errorMessage);
+  char strLengthOfMessage[20];
+
+  sprintf(strLengthOfMessage, "%d", lengthOfMessage);
+      
+  char *lengthOfContent;
+  lengthOfContent = malloc(50);
+  strcpy(lengthOfContent, "Content-Length: ");
+  strcat(lengthOfContent, strLengthOfMessage);
+  strcat(lengthOfContent, "\n");
+  int lengthOfContentLength = strlen(lengthOfContent);
+
+      
+  send(connfd, "HTTP/1.1 500 Internal Server Error\n",35,0);
+  send(connfd, contentHeader, strlen(contentHeader),0);
+  send(connfd, lengthOfContent, lengthOfContentLength, 0);
+  send(connfd, "Connection: keep-alive\n\n",24,0);
+  send(connfd, errorMessage, lengthOfMessage, 0);
+
+  //shut down the session. Client received an error message
+  shutdown(connfd, SHUT_RDWR);
+  close(connfd);
+}
+
+//creating error 501
+//thrown when requested data type is not supported
+//or, http version is not supported
 void error501Message(int connfd, char * notSupported)
 {
   char *errorMessage = malloc(100);
@@ -67,10 +210,7 @@ void error501Message(int connfd, char * notSupported)
   strcpy(contentHeader, "Content-Type: ");
   strcat(contentHeader, "text/html");
   strcat(contentHeader, "\n");
-
      
-  //printf("%s\n", pageNotFound);
-
   int lengthOfMessage = strlen(errorMessage);
   char strLengthOfMessage[20];
 
@@ -90,80 +230,75 @@ void error501Message(int connfd, char * notSupported)
   send(connfd, "Connection: keep-alive\n\n",24,0);
   send(connfd, errorMessage, lengthOfMessage, 0);
 
-      
+  //close that session since error has been display to the client
   shutdown(connfd, SHUT_RDWR);
   close(connfd);
 }
 
-void error404Message(int connfd, char * urlEntered)
+//post processing
+void postProcessing(char * message, int connfd)
 {
-      char *contentHeader;
-      contentHeader = malloc(50);
-      strcpy(contentHeader, "Content-Type: ");
-      strcat(contentHeader, "text/html");
-      strcat(contentHeader, "\n");
+  char * tokens;
+  tokens = strtok(message, "\n");
 
-      char * strPortNumber = malloc(10);
-      sprintf(strPortNumber, "%d", portNumber);
-      
-      char *pageNotFound = malloc(100);
-      strcpy(pageNotFound, "<html><body>ERROR: 404. Not Found Reason URL does not exist: http://localhost:");
-      strcat(pageNotFound, strPortNumber);
-      strcat(pageNotFound, urlEntered);
-      strcat(pageNotFound, "</body></html>\n");
-      //printf("%s\n", pageNotFound);
-
-      int lengthOfMessage = strlen(pageNotFound);
-      char strLengthOfMessage[20];
-
-      sprintf(strLengthOfMessage, "%d", lengthOfMessage);
-      
-      char *lengthOfContent;
-      lengthOfContent = malloc(50);
-      strcpy(lengthOfContent, "Content-Length: ");
-      strcat(lengthOfContent, strLengthOfMessage);
-      strcat(lengthOfContent, "\n");
-      int lengthOfContentLength = strlen(lengthOfContent);
-
-      
-      send(connfd, "HTTP/1.1 404 Not Found\n",23,0);
-      send(connfd, contentHeader, strlen(contentHeader),0);
-      send(connfd, lengthOfContent, lengthOfContentLength, 0);
-      send(connfd, "Connection: keep-alive\n\n",24,0);
-      send(connfd, pageNotFound, lengthOfMessage, 0);
-}
-
-void error400Message(int connfd, char * errorType, char * message)
-{
-  char *errorMessage = malloc(150);
-
-  if(strncmp(errorType, "filepath",8)==0)
+  while(tokens != NULL)
     {
-      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL:");
-    }
-  else if(strncmp(errorType, "httpversion",11)==0)
-    {
-      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version: ");
-    }
-  else if(strncmp(errorType, "httpinc", 7) == 0)
-    {
-      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid HTTP-Version incomplete: ");
-    }
-  else if(strncmp(errorType, "invalidurl", 7) == 0)
-    {
-      strcpy(errorMessage, "<html><body>ERROR: 400. Invalid URL: ");
+      int strLength = strlen(tokens);
+      if(strLength == 1)
+	{
+	  tokens = strtok(NULL ,"\n");
+	  break;
+	}
+     tokens = strtok(NULL, "\n");
     }
   
-  strcat(errorMessage, message);
-  strcat(errorMessage, " </body></html>\n"); 
+  //values to be extracted
+  //checking for DOS attacks by over subscribing memory
+  char * extractedString;
+  if(NULL == (extractedString = malloc(strlen(tokens)+1)))
+    {
+      error500Message(connfd);
+      free(extractedString);
+      return;
+    }
+    
+  char * keyPairValues[MAX_KEY_VALUE_PAIR];  
+  memcpy(extractedString, tokens, strlen(tokens));
+  tokens = strtok(extractedString, "&");
+
+  int i = 0;
+  while (tokens != NULL)
+    {
+      if(NULL == (keyPairValues[i] = malloc(strlen(tokens)+1)))
+	{
+	  error500Message(connfd);
+	  free(keyPairValues[i]);
+	  return;
+	}
+      
+      strcpy(keyPairValues[i], tokens);
+      i++;
+
+      tokens = strtok(NULL, "&");
+    }
+
+  int j;
+  char *errorMessage = malloc(READ_BUFFER);
+  strcpy(errorMessage, "<html><body><h1>Post Data</h1><pre>");
+  for(j = 0; j<i; j++)
+    {
+      strcat(errorMessage, keyPairValues[j]);
+      strcat(errorMessage, "\n");
+    }
+  
+  strcat(errorMessage, "</pre></body></html>\n"); 
 
   char *contentHeader;
   contentHeader = malloc(50);
   strcpy(contentHeader, "Content-Type: ");
   strcat(contentHeader, "text/html");
   strcat(contentHeader, "\n");
-  //printf("%s\n", pageNotFound);
-
+     
   int lengthOfMessage = strlen(errorMessage);
   char strLengthOfMessage[20];
 
@@ -176,14 +311,13 @@ void error400Message(int connfd, char * errorType, char * message)
   strcat(lengthOfContent, "\n");
   int lengthOfContentLength = strlen(lengthOfContent);
 
-      
-  send(connfd, "HTTP/1.1 400 Bad Request\n",25,0);
+  send(connfd, "HTTP/1.1 200 OK\n",16,0);
   send(connfd, contentHeader, strlen(contentHeader),0);
   send(connfd, lengthOfContent, lengthOfContentLength, 0);
   send(connfd, "Connection: keep-alive\n\n",24,0);
   send(connfd, errorMessage, lengthOfMessage, 0);
 
-      
+  //shut down the session, client got an error message
   shutdown(connfd, SHUT_RDWR);
   close(connfd);
 }
@@ -192,7 +326,24 @@ void getProcessing(char * message, int connfd)
 {
   //request type
   char * tokens = strtok(message, " \n");
-  char * httpRequestType = malloc(strlen(tokens));
+  char * httpRequestType;
+
+  //checking for buffer overflow
+  if(NULL == (httpRequestType = malloc(strlen(tokens))))
+    {
+      error500Message(connfd);
+      free(httpRequestType);
+      return;
+    }
+  
+  //Looking for GET length
+  //already checked the first three letters to be GET
+  if(strlen(tokens) != 3)
+    {
+      error400Message(connfd, "invalidmethod", httpRequestType);
+      return;
+    }
+  
   strncpy(httpRequestType, tokens, strlen(tokens));
   printf("httpRequestType %s\n", httpRequestType);
 
@@ -218,25 +369,42 @@ void getProcessing(char * message, int connfd)
   char * urlEntered;
   if(strlen(tokens) != 1)
     {
-      urlEntered = malloc(strlen(tokens));
-      strncpy(urlEntered, tokens, strlen(tokens));
+      //checking for buffer overflow
+      if(NULL == (urlEntered = malloc(strlen(tokens))))
+	{
+	  error500Message(connfd);
+	  free(urlEntered);
+	  return;
+	}
       
+      strncpy(urlEntered, tokens, strlen(tokens));
       filepath = malloc(strlen(tokens)+3);
       strncpy(filepath, "www", 3);
       strcat(filepath, tokens);
     }
-  else if (strlen(tokens) == 1)
+  else
       {
-	printf("%s\n", tokens);
-	filepath = "www/index.html";
+	if(filepath == NULL){
+	  //printf("%s\n", tokens);
+	  filepath = "www/index.html";
+	}
       }
 
-  if(strncmp(filepath, "www/index.htm",13) == 0)
+  //for index.htm or index.ws, all will be converted to index.html
+  int i = 0;
+  char * tempIndexFile = malloc(14);
+  for(i = 1; i<DIRECTORY_INDEX_SIZE; i++)
     {
-      filepath = "www/index.html";
-    }
-
-  printf("File path %s\n", filepath);
+      strcpy(tempIndexFile, "www/");
+      strcat(tempIndexFile, directoryIndexes[i]);
+      
+      if(strcmp(filepath, tempIndexFile) == 0)
+	{
+	  printf("root %s\n", filepath);
+	  filepath = "www/index.html";
+	  break;
+	}
+   }
 
   //http version
   tokens = strtok(NULL, " \n");
@@ -257,7 +425,15 @@ void getProcessing(char * message, int connfd)
       return;
     }
   
-  char * httpVersion = malloc(strlen(tokens));
+  char * httpVersion;
+  //preventing buffer overflow
+  if(NULL == (httpVersion = malloc(strlen(tokens))))
+    {
+      error500Message(connfd);
+      free(httpVersion);
+      return;
+    }
+  
   strncpy(httpVersion, tokens, strlen(tokens));
   printf("HTTP Version %s\n\n", httpVersion);
   
@@ -394,20 +570,17 @@ void runServer()
     clilen = sizeof(cliaddr);
     //accept a connection
     connfd = accept (listenfd, (struct sockaddr *) &cliaddr, &clilen);
-
-    printf("%s\n","Received request...");
+    printf("%s\n","MSG: Received request...");
 
     if ( (childpid = fork ()) == 0 ) {//if it’s 0, it’s child process
 
-      printf ("%s\n","Child created for dealing with client requests");
+      printf ("%s\n","MSG: Child created for dealing with client requests");
 
       //close listening socket
       close (listenfd);
 
       while ( (n = recv(connfd, buf, MAXLINE,0)) > 0)  {
-	//printf("%s","String received from and resent to the client:\n");
-	//puts(buf);
-
+	//printf("BUFFER: %s\n", buf);
 	char * tempString = malloc(READ_BUFFER);
 	strcpy(tempString, buf);
 	
@@ -419,23 +592,23 @@ void runServer()
 	  }
 	else if(strncmp(getPostTag, "GET", 3)==0)
 	  {
-	    //do GET processing
 	    getProcessing(buf, connfd);
 	  }
 	else if(strncmp(getPostTag, "POST", 4) == 0)
 	  {
-	    printf("ERROR: POST is not a GET request\n");
-	    error501Message(connfd, getPostTag);
+	    postProcessing(buf, connfd);
 	  }
-	
+	else if(strlen(getPostTag)<3)
+	  {
+	    error400Message(connfd, "invalidmethod", getPostTag);
+	  }
 	else
 	  {
 	    printf("ERROR: request is not supproted: %s, %zu\n", getPostTag, strlen(getPostTag));
 	    error501Message(connfd, getPostTag);
 	  }
 
-	printf("%s\n", buf);
-	
+
       }
 
       if (n < 0)
@@ -545,7 +718,6 @@ void parseServerConfFile(char * fileLocation)
   */
   
 }
-
 
 int main (int argc, char **argv)
 {
