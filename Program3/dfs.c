@@ -15,11 +15,13 @@
 #include <memory.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
 #define USERS 1000
 #define CONFIG_FILE "dfs.conf"
+#define LISTENQ 100
 
 //variables used across functions
 char *rootFolder;
@@ -39,7 +41,91 @@ bool validateUser(char * username, char * password)
 
 void runServer()
 {
-	 int sock;                           //This will be our socket
+    
+   int listenfd, connfd, n;
+  pid_t childpid;
+  socklen_t clilen;
+  char buf[READ_BUFFER];
+  struct sockaddr_in cliaddr, servaddr;
+
+  //Create a socket for the soclet
+  //If sockfd<0 there was an error in the creation of the socket
+  if ((listenfd = socket (AF_INET, SOCK_STREAM, 0)) <0) {
+    perror("ERROR: Problem in creating the socket\n");
+    exit(EXIT_FAILURE);
+  }
+  else
+    {
+      printf("MSG: Socket created!\n");
+    }
+
+  //preparation of the socket address
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  servaddr.sin_port = htons(portNumber);
+
+  //reuse the same port - makes testing on the same port easier
+  int reuse = 1;
+  if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse,sizeof(reuse)) == -1)
+    {
+      perror("ERROR: Setsockopt failed\n");
+    }
+  
+  //bind the socket
+  if(bind (listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0)
+    {
+      perror("ERROR: error binding the socket\n");
+      exit(EXIT_FAILURE);
+    }
+  else
+    {
+      printf("MSG: Binding successful!\n");
+    }
+
+  //listen to the socket by creating a connection queue, then wait for clients
+  if(listen (listenfd, LISTENQ)<0)
+    {
+      perror("ERROR: Error listening\n");
+      exit(EXIT_FAILURE);
+    }
+  else
+    {
+      printf("MSG: Server running...waiting for connections.\n");
+    }
+
+     for ( ; ; ) {
+
+    clilen = sizeof(cliaddr);
+    //accept a connection
+    connfd = accept (listenfd, (struct sockaddr *) &cliaddr, &clilen);
+    printf("%s\n","MSG: Received request...");
+
+    if ( (childpid = fork ()) == 0 ) {//if it’s 0, it’s child process
+
+      printf ("%s\n","MSG: Child created for dealing with client requests");
+
+      //close listening socket
+      close (listenfd);
+
+      while ( (n = recv(connfd, buf, READ_BUFFER,0)) > 0){
+
+        printf("client message received %s", buf);
+
+        n = send(connfd, buf, READ_BUFFER, 0);
+
+        if(n < 0)
+          printf("ERROR: Sending message\n");
+
+        bzero(buf, READ_BUFFER);
+      }
+
+      exit(EXIT_SUCCESS);
+
+    }
+
+  }
+
+/*	 int sock;                           //This will be our socket
   struct sockaddr_in sin, remote;     //"Internet socket address structure"
   unsigned int remote_length;         //length of the sockaddr_in structure
   int nbytes;                        //number of bytes we receive in our message
@@ -89,7 +175,7 @@ bzero(&sin,sizeof(sin));                    //zero the struct
   	if(nbytes < 0)
   		printf("ERROR: Error sending the message\n");
 }
-
+*/
 }
 
 //create directory if not present

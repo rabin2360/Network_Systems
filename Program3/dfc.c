@@ -52,7 +52,70 @@ char* generateLIST(char * path)
 
 void runClient()
 {
-  int nbytes;                             // number of bytes send by sendto()
+
+	int sock;
+    struct sockaddr_in server;
+    char message[READ_BUFFER];
+    char server_reply[READ_BUFFER];
+    int read_size;
+
+    //Create socket
+    sock = socket(AF_INET , SOCK_STREAM , 0);
+    if (sock == -1)
+    {
+        printf("Could not create socket");
+    }
+    printf("Socket created");
+
+    server.sin_addr.s_addr = inet_addr(LOCALHOST);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(10001);
+
+    //Connect to remote server
+    if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+        perror("connect failed. Error");
+        return;
+    }
+
+    printf("Connected\n");
+
+     //keep communicating with server
+    while(1)
+    {
+        printf("Enter message : ");
+        bzero(message, READ_BUFFER);
+
+        fgets(message, READ_BUFFER, stdin);
+         
+        //Send some data
+        if( send(sock , message , strlen(message) , 0) < 0)
+        {
+            printf("Send failed");
+            return;
+        }
+        else
+        {
+        	printf("Sending message ..\n");
+        }
+         
+         // ( (read_size = recv(client_sock , client_message , READ_BUFFER , 0)) > 0
+
+        //Receive a reply from the server
+        if( recv(sock , server_reply , READ_BUFFER , 0) < 0)
+        {
+            printf("recv failed");
+            break;
+        }
+         
+        printf("Server reply :");
+        printf("%s\n",server_reply);
+        bzero(&(server_reply), sizeof(server_reply));
+    }
+     
+    close(sock);
+
+ /* int nbytes;                             // number of bytes send by sendto()
   int sock;                               //this will be our socket
   char buffer[MAXBUFSIZE];
 
@@ -101,7 +164,7 @@ while(1)
 
 	printf("Server says %s", buffer);
 }
-
+*/
 }
 
 
@@ -347,10 +410,10 @@ int main(int argc, char **argv)
 	
 	parseConfigFile(argv[1]);
 
-	splitFile("wine3.jpg");	
+	//splitFile("wine3.jpg");	
 	//splitFile("foo1");
 
-	combineFiles();
+	//combineFiles();
 	runClient();
 
 return 0;
