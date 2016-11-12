@@ -33,10 +33,55 @@ int usersTotal;
 //for using stat and directory creation
 struct stat st = {0};
 
-bool validateUser(char * username, char * password)
+void handlePut()
 {
+  printf("Handling PUT command... \n");
+}
 
-	return false;
+void handleGet()
+{
+  printf("Handling GET command ... \n");
+}
+
+void handleList()
+{
+  printf("Handling LIST command ...\n");
+}
+
+void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
+{
+  int bytesSent;
+  char * tempUsernamePassword = malloc(bytesLength);
+  char * message = malloc(READ_BUFFER);
+  strncpy(tempUsernamePassword, usernameAndPassword, bytesLength);
+
+  char * tokens = strtok(tempUsernamePassword, "&");
+  tokens = strtok(NULL, "&");
+
+  char * tempUsername = tokens;
+  tokens = strtok(NULL, "&");
+  char * tempPassword = tokens;
+
+  //printf("username:%s\n", tempUsername);
+  //printf("password:%s\n", tempPassword);
+
+  for(int i = 0; i<usersTotal; i++)
+  {
+    //printf("Inside loop: username %s, password %s\n", userNames[i], password[i]);
+      if(strcmp(tempUsername, userNames[i]) == 0 && strcmp(tempPassword, password[i]) == 0)
+      {
+        //printf("MSG: Found\n");
+        strcpy(message, "valid");
+        bytesSent = send(connfd, message, strlen(message), 0);
+
+        if(bytesSent < 0)
+          printf("ERROR: Sending valid user message\n");
+
+        return;
+      }
+  }
+
+  //printf("MSG: Not found\n");
 }
 
 void runServer()
@@ -109,9 +154,30 @@ void runServer()
 
       while ( (n = recv(connfd, buf, READ_BUFFER,0)) > 0){
 
-        printf("client message received %s", buf);
+        //printf("client message received %s\n", buf);
 
-        n = send(connfd, buf, READ_BUFFER, 0);
+        if(strncmp(buf, "valid", 5) == 0)
+        {
+          validateUser(buf, n, connfd);
+        }
+        else if(strncmp(buf, "PUT", 3) == 0)
+        {
+          handlePut();
+        }
+        else if(strncmp(buf, "GET", 3) == 0)
+        {
+          handleGet();
+        }
+        else if(strncmp(buf, "LIST", 4) == 0)
+        {
+          handleList();
+        }
+        else
+        {
+          printf("ERROR: Message not recognized.\n");
+        }
+
+        n = send(connfd, buf, strlen(buf), 0);
 
         if(n < 0)
           printf("ERROR: Sending message\n");
@@ -125,57 +191,6 @@ void runServer()
 
   }
 
-/*	 int sock;                           //This will be our socket
-  struct sockaddr_in sin, remote;     //"Internet socket address structure"
-  unsigned int remote_length;         //length of the sockaddr_in structure
-  int nbytes;                        //number of bytes we receive in our message
-  char buffer[MAXBUFSIZE];             //a buffer to store our received message
-
-bzero(&sin,sizeof(sin));                    //zero the struct
-  sin.sin_family = AF_INET;                   //address family
-  sin.sin_port = htons(portNumber);        //htons() sets the port # to network byte order
-  sin.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
-
- //Causes the system to create a generic socket of type UDP (datagram)
-  if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
-    {
-      printf("ERROR: Unable to create socket\n");
-      exit(1);
-    }
-
-  if (bind(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-    {
-      printf("ERROR: Unable to bind socket.\n");
-      exit(1);
-    }
-  else
-    {
-      printf("MSG: Server successfully started!\n");
-    }
-
-
-  remote_length = sizeof(remote);
-  char msg[MAXBUFSIZE];
-
-  while(1){
-
-    //resetting the buffers whenever needed
-    bzero(buffer,sizeof(buffer));
-    bzero(msg, MAXBUFSIZE);
-
-    //receiving message from client
-    nbytes = recvfrom(sock,buffer,MAXBUFSIZE,0, (struct sockaddr *) &remote, &remote_length);
-    printf("%s", buffer);
-
-     if(nbytes < 0)
-      printf("ERROR: Error receiving the message\n");
-
-  	nbytes = sendto(sock, buffer, strlen(buffer), 0, (struct sockaddr *)&remote, remote_length);
-
-  	if(nbytes < 0)
-  		printf("ERROR: Error sending the message\n");
-}
-*/
 }
 
 //create directory if not present
@@ -227,7 +242,7 @@ void readConfigFile(char *rootFolder)
 		strcpy(subDirectory, rootFolder);
 		strcat(subDirectory, "/");
 	
-		printf("username: %s, password: %s\n", userNames[i], password[i]);
+		//printf("username: %s, password: %s\n", userNames[i], password[i]);
 		strcat(subDirectory, userNames[i]);
 		createDirectory(subDirectory);
 	}
@@ -256,8 +271,8 @@ int main(int argc, char ** argv)
 	readConfigFile(rootFolder);
 	
 	//DEBUG
-	printf("Root folder %s\n", rootFolder);
-	printf("Port # %d\n", portNumber);
+	//printf("Root folder %s\n", rootFolder);
+	//printf("Port # %d\n", portNumber);
 
 	runServer();
 

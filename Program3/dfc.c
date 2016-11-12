@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <memory.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
@@ -50,6 +51,43 @@ char* generateLIST(char * path)
 	return listCommand;
 }
 
+bool validateUser(int sock)
+{
+	char * usernameAndPassword = malloc(FILENAME);
+	char * server_reply = malloc(FILENAME);
+
+	strcpy(usernameAndPassword, "valid&");
+	strcat(usernameAndPassword, username);
+	strcat(usernameAndPassword, "&");
+	strcat(usernameAndPassword, password);
+
+	//printf("username and password: %s\n", usernameAndPassword);
+
+	if( send(sock, usernameAndPassword, strlen(usernameAndPassword), 0) < 0)
+	{
+		return false;
+	}
+	else
+	{
+		//server reply
+		if( recv(sock , server_reply , FILENAME , 0) < 0)
+        {
+            printf("recv failed");
+            return false;
+        }
+        else
+        {
+        	if(strncmp(server_reply, "valid",5) == 0)
+        		return true;
+        	/*else
+        		printf("server reply %s\n", server_reply);
+        	*/	
+        }
+	}
+
+	return false;
+}
+
 void runClient()
 {
 
@@ -58,14 +96,15 @@ void runClient()
     char message[READ_BUFFER];
     char server_reply[READ_BUFFER];
     int read_size;
+    bool loopControl;
 
     //Create socket
     sock = socket(AF_INET , SOCK_STREAM , 0);
     if (sock == -1)
     {
-        printf("Could not create socket");
+        printf("ERROR: Could not create socket");
     }
-    printf("Socket created");
+    printf("MSG: Socket created.\n");
 
     server.sin_addr.s_addr = inet_addr(LOCALHOST);
     server.sin_family = AF_INET;
@@ -74,100 +113,59 @@ void runClient()
     //Connect to remote server
     if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
     {
-        perror("connect failed. Error");
+        printf("ERROR: connect failed. Error");
         return;
     }
 
-    printf("Connected\n");
+    printf("MSG: Connected.\n");
+
+    loopControl = validateUser(sock);
+
+    if(!loopControl)
+    	printf("ERROR: Invalid username and/or password\n. Please check dfc.conf file\n");
+    else
+    	printf("MSG: Username and password authenticated.\n");
 
      //keep communicating with server
-    while(1)
+    while(loopControl)
     {
         printf("Enter message : ");
         bzero(message, READ_BUFFER);
-
         fgets(message, READ_BUFFER, stdin);
          
+        //if(validateUser(sock)){
+        //	printf("MSG: Valid user.\n");
+
         //Send some data
         if( send(sock , message , strlen(message) , 0) < 0)
         {
             printf("Send failed");
-            return;
+            //return;
         }
         else
         {
-        	printf("Sending message ..\n");
-        }
-         
-         // ( (read_size = recv(client_sock , client_message , READ_BUFFER , 0)) > 0
+        	printf("MSG: Sending message ..\n");
 
-        //Receive a reply from the server
+        	//Receive a reply from the server
         if( recv(sock , server_reply , READ_BUFFER , 0) < 0)
         {
-            printf("recv failed");
-            break;
+            printf("ERROR: Recv failed");
+        }
+        else
+        {
+        	printf("MSG: Server reply :");
+        	printf("%s\n",server_reply);
         }
          
-        printf("Server reply :");
-        printf("%s\n",server_reply);
         bzero(&(server_reply), sizeof(server_reply));
+
+        }
+	          
+        }
+
+        close(sock); 
     }
      
-    close(sock);
-
- /* int nbytes;                             // number of bytes send by sendto()
-  int sock;                               //this will be our socket
-  char buffer[MAXBUFSIZE];
-
-  struct sockaddr_in remote;              //"Internet socket address structure"
-
-  int remote_length;
-
-  bzero(&remote,sizeof(remote));               //zero the struct
-  remote.sin_family = AF_INET;                 //address family
- 
-  //getting portnum for each of the portNumbers
-  char * portNum = strtok(portNumbers[0], ":");
-  portNum = strtok(NULL, "\n");
-  printf("portNumbers %s\n", portNum);
-  
-  remote.sin_port = htons(atoi(portNum));      //sets port to network byte order
-  remote.sin_addr.s_addr = inet_addr(LOCALHOST); //sets remote IP address
-
- //Causes the system to create a generic socket of type UDP (datagram)
-  if ((sock = socket(AF_INET, SOCK_DGRAM,IPPROTO_UDP) ) < 0)
-    {
-      printf("Error: Unable to create socket");
-      exit(1);
-    }
-
-     char command[MAXBUFSIZE];
-     remote_length = sizeof(remote);
-
-while(1)
-{
-	//prompting the user
-    printf("Please enter a command: ");
-
-    //resetting the buffer
-    bzero(command, MAXBUFSIZE);
-    fgets(command, MAXBUFSIZE, stdin);
-    remote_length = sizeof(remote);
-
-    nbytes = sendto(sock, command, strlen(command),0,(struct sockaddr *) &remote, remote_length);
-        if(nbytes <  0)
-	  printf("ERROR: Error sending the message %s\n", command);
-
-	bzero(buffer, sizeof(buffer));
-	//wait for response
-	nbytes = recvfrom(sock, buffer, MAXBUFSIZE, 0, (struct sockaddr *)&remote, &remote_length);
-
-	printf("Server says %s", buffer);
-}
-*/
-}
-
-
 
 void parseConfigFile(char * filename)
 {
@@ -342,60 +340,6 @@ void splitFile(char * filename)
 
 		close(fd);
 	}
-	//get the file size of the larger size
-	//read must be binary to get bytes
-	/*FILE *fpLargeFile = fopen(filename, "rb");
-	long filesize = -1;
-
-	//determining the size of the larger file
-	if(fpLargeFile)
-	{
-		fseek(fpLargeFile, 0, SEEK_END);
-		filesize = ftell(fpLargeFile)+1;
-		fclose(fpLargeFile);
-	}
-
-	printf("File size %ld \n", filesize);
-
-	FILE *fpSmallerFile;
-	long smallerFileSize = filesize;
-	char smallFileName[300];
-	char readBuffer[READ_BUFFER];
-
-	fpLargeFile = fopen(filename, "r");
-
-	long currentFileSize = 0;
-
-	printf("File size: %ld\n", smallerFileSize);
-
-	if(fpLargeFile)
-	{
-
-		for(int i = 0; i<1; i++)
-		{
-			currentFileSize = 0;
-			sprintf(smallFileName, "file.jpg",i);
-			fpSmallerFile = fopen(smallFileName, "wb");
-
-			if(fpSmallerFile)
-			{
-				while(currentFileSize <= smallerFileSize && fgets(readBuffer, READ_BUFFER, fpLargeFile))
-				{
-					currentFileSize += strlen(readBuffer);
-					fputs(readBuffer, fpSmallerFile);
-				}
-
-
-
-				printf("file size written: %ld \n", currentFileSize);
-				fclose(fpSmallerFile);
-			}
-		}
-
-	fclose(fpLargeFile);
-	}
-*/
-
 }
 
 int main(int argc, char **argv)
