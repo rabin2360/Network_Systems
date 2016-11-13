@@ -29,13 +29,80 @@ int portNumber;
 char * userNames[USERS];
 char * password[USERS];
 int usersTotal;
+char * clientUsername;
+char * clientPassword;
 
 //for using stat and directory creation
 struct stat st = {0};
 
-void handlePut()
+void handlePut(int connfd)
 {
   printf("Handling PUT command... \n");
+
+ //get the file name
+  int bytesRead;
+  char buf[READ_BUFFER];
+  char endOfMessage[READ_BUFFER];
+  
+  char *filename = malloc(READ_BUFFER);
+  int fileFd;
+  int writtenBytes;
+
+  bytesRead = recv(connfd, buf, READ_BUFFER,0);
+  strncpy(filename, buf, bytesRead);
+  printf("Filename: %s\n", filename);
+  fileFd = open(filename, O_RDWR | O_CREAT, 0777);
+
+  bzero(buf, READ_BUFFER);
+  strcpy(buf, "OK");
+  send(connfd, buf, strlen(buf), 0);
+
+  bytesRead = recv(connfd, buf, READ_BUFFER,0);
+  printf("Filesize: %s\n", buf);
+
+
+  int fileSizeBuffer = atoi(buf);
+  char *fileContent = malloc(fileSizeBuffer);
+  printf("Before file writing\n");
+  bytesRead = recv(connfd, fileContent, fileSizeBuffer, 0);
+  writtenBytes = write(fileFd, fileContent, bytesRead);
+  close(fileFd);
+  printf("After file writing\n");
+
+  /*bzero(buf, READ_BUFFER);
+  strcpy(buf, "OK");
+  send(connfd, buf, strlen(buf), 0);
+*/
+  
+  /*while((bytesRead = recv(connfd, buf, READ_BUFFER,0))>0)
+  {
+      writtenBytes = write(fileFd, fileContent, bytesRead);
+      printf("writtenBytes %d, bytesRead %d\n", writtenBytes, bytesRead);
+      bzero(fileContent, READ_BUFFER);
+  }
+*/
+
+  //printf("Data: %s\n", buf);
+  //received done
+  //bzero(buf, READ_BUFFER);
+  /*bytesRead = recv(connfd, endOfMessage, READ_BUFFER,0);
+  
+  //compare
+  if(strcmp(endOfMessage, "DONE"))
+  {
+    printf("End of file reading\n");
+  }
+  else
+  {
+   
+    printf("Received %s\n", buf);
+  }
+
+
+  bzero(buf, READ_BUFFER);
+  strcpy(buf, "FINISH");
+  send(connfd, buf, strlen(buf), 0);
+*/
 }
 
 void handleGet()
@@ -53,14 +120,16 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   int bytesSent;
   char * tempUsernamePassword = malloc(bytesLength);
   char * message = malloc(READ_BUFFER);
+  clientUsername = malloc(READ_BUFFER);
+  clientPassword = malloc(READ_BUFFER);
+
   strncpy(tempUsernamePassword, usernameAndPassword, bytesLength);
 
   char * tokens = strtok(tempUsernamePassword, "&");
   tokens = strtok(NULL, "&");
-
-  char * tempUsername = tokens;
+  strcpy(clientUsername, tokens);
   tokens = strtok(NULL, "&");
-  char * tempPassword = tokens;
+  strcpy(clientPassword, tokens);
 
   //printf("username:%s\n", tempUsername);
   //printf("password:%s\n", tempPassword);
@@ -68,7 +137,7 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   for(int i = 0; i<usersTotal; i++)
   {
     //printf("Inside loop: username %s, password %s\n", userNames[i], password[i]);
-      if(strcmp(tempUsername, userNames[i]) == 0 && strcmp(tempPassword, password[i]) == 0)
+      if(strcmp(clientUsername, userNames[i]) == 0 && strcmp(clientPassword, password[i]) == 0)
       {
         //printf("MSG: Found\n");
         strcpy(message, "valid");
@@ -162,7 +231,7 @@ void runServer()
         }
         else if(strncmp(buf, "PUT", 3) == 0)
         {
-          handlePut();
+          handlePut(connfd);
         }
         else if(strncmp(buf, "GET", 3) == 0)
         {
@@ -174,7 +243,7 @@ void runServer()
         }
         else
         {
-          printf("ERROR: Message not recognized.\n");
+          printf("ERROR: Message not recognized, %s.\n", clientUsername);
         }
 
         n = send(connfd, buf, strlen(buf), 0);
