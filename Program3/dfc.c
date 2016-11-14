@@ -266,8 +266,6 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 
 		if(strcmp(messageTag, "PUT") == 0){
 
-			//sending file name
-
 			//open the file
 			int fileFd;
 			fileFd = open(message, O_RDONLY);
@@ -285,16 +283,22 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 			int cumReadSize = lseek(fileFd, 0, SEEK_END);
 			lseek(fileFd, 0, SEEK_SET);
 
-			printf("Cum size: %d\n", cumReadSize);
+			//printf("Cum size: %d\n", cumReadSize);
 
 			bzero(message,sizeof(message));
-			sprintf(message, "%d", cumReadSize);
+			
+			if(putCommandsNum == 3){
+				sprintf(message, "%s", destinationFolder);
+			}
+			else
+			{
+				sprintf(message, "%s", "null");
+			}
 
 			if(send(sock, message, strlen(message), 0)<0)
-			{
-				printf("ERROR: Cannot send the file size.\n");
-			}
-			
+				{
+					printf("ERROR: Cannot send the folder name.\n");
+				}
 			bzero(fileContent, READ_BUFFER);
 			bzero(message, strlen(message));
 
@@ -305,11 +309,9 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 
 			while((bytesRead = read(fileFd, fileContent, READ_BUFFER)) > 0){
 				cumReadSize += bytesRead;
-				sentData = send(sock, fileContent, bytesRead, 0);
-
-				if(sentData < 0)
+				if((sentData = send(sock, fileContent, bytesRead, 0)<0))
 				{
-					printf("Error sending data");
+					printf("ERROR: Sending data\n");
 				}
 				/*
 				else
@@ -318,16 +320,14 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 					printf("Sent so far: %d\n", sentData);
 				}
 				*/
-
 				bzero(fileContent, READ_BUFFER);
 			}
 
 
-			printf("Final cum size: %d cum sent: %d\n", cumReadSize, cumSent);
-
+			//printf("Final cum size: %d cum sent: %d\n", cumReadSize, cumSent);
 			close(fileFd);
 
-        bzero(&(server_reply), sizeof(server_reply));
+        	bzero(&(server_reply), sizeof(server_reply));
 
         close(sock); 
     }

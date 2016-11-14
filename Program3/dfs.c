@@ -35,6 +35,15 @@ char * clientPassword;
 //for using stat and directory creation
 struct stat st = {0};
 
+//create directory if not present
+void createDirectory(char * directoryName)
+{
+  if(stat(directoryName, &st) == -1)
+  {
+    mkdir(directoryName, 0700);
+  }
+}
+
 void handlePut(int connfd)
 {
   printf("Handling PUT command... \n");
@@ -50,45 +59,77 @@ void handlePut(int connfd)
   int writtenBytes;
 
   char *fileLocation = malloc(READ_BUFFER);
-  //strcpy(fileLocation, "./");
-  strcpy(fileLocation, rootFolder);
-  strcat(fileLocation, "/");
-  strcat(fileLocation, clientUsername);
-  strcat(fileLocation, "/r");
+
 
   bytesRead = recv(connfd, buf, READ_BUFFER,0);
   strncpy(filename, buf, bytesRead);
+  //strcat(fileLocation, filename);
+
+  bzero(buf, READ_BUFFER);
+  strcpy(buf, "FILENAME");
+  send(connfd, buf, strlen(buf), 0);
+
+  bytesRead = recv(connfd, buf, READ_BUFFER,0);
+  char *folderName = malloc(READ_BUFFER);
+  strncpy(folderName, buf, bytesRead);
+
+  //printf("Filesize: %s\n", buf);
+
+    strcpy(fileLocation, rootFolder);
+    strcat(fileLocation, "/");
+
+  //int fileSizeBuffer = atoi(buf);
+  if(strncmp(folderName, "null", 3) != 0)
+  {
+    //printf("Inside: %s\n", folderName);
+    char * tempDirectory = malloc(READ_BUFFER);
+    strcpy(tempDirectory, fileLocation);
+    strcat(tempDirectory, folderName);
+    //create folder
+    createDirectory(tempDirectory);
+
+    //create a path name to open a file there
+    //printf("%s\n", tempDirectory);
+    //strcpy(fileLocation, "./");
+
+    strcpy(fileLocation, tempDirectory);
+    strcat(fileLocation, "/r");
+  }
+  else
+  {
+    //printf("Outside: %s\n", folderName);
+
+      //strcpy(fileLocation, "./");
+
+    strcat(fileLocation, clientUsername);
+    strcat(fileLocation, "/r");
+  }
+
   strcat(fileLocation, filename);
 
-  printf("File Location: %s\n", fileLocation);
+
   //fileFd = open(filename, O_RDWR | O_CREAT, 0777);
   fileFd2 = open(fileLocation, O_RDWR | O_CREAT, 0777);
 
   if(fileFd2 == -1)
-    printf("ERROR opening file\n");
+    printf("ERROR opening file - %s\n", fileLocation);
 
-  bzero(buf, READ_BUFFER);
-  strcpy(buf, "OK");
-  send(connfd, buf, strlen(buf), 0);
+  //printf("File Location: %s\n", fileLocation);
+  
 
-  bytesRead = recv(connfd, buf, READ_BUFFER,0);
-  //printf("Filesize: %s\n", buf);
-
-
-  int fileSizeBuffer = atoi(buf);
-  char *fileContent = malloc(fileSizeBuffer);
-  printf("Allocated space %d\n", fileSizeBuffer);
+  char *fileContent = malloc(READ_BUFFER);
+  //printf("Allocated space %d\n", fileSizeBuffer);
   //printf("Before file writing\n");
 
   int cumBytesRead = 0;
-  while((bytesRead = recv(connfd, fileContent, fileSizeBuffer, 0))>0){
+  while((bytesRead = recv(connfd, fileContent, READ_BUFFER, 0))>0){
 
   //printf("Bytes received %d\n", bytesRead);
   //writtenBytes = write(fileFd, fileContent, strlen(fileContent));
   cumBytesRead += bytesRead;
   writtenBytes = write(fileFd2, fileContent, bytesRead);
-  bzero(fileContent, fileSizeBuffer);
-    printf("bytes read %d cum bytes: %d\n", bytesRead, cumBytesRead);
+  bzero(fileContent, READ_BUFFER);
+    //printf("bytes read %d cum bytes: %d\n", bytesRead, cumBytesRead);
 
   }
   //close(fileFd);
@@ -124,8 +165,8 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   tokens = strtok(NULL, "&");
   strcpy(clientPassword, tokens);
 
-  printf("username:%s\n", clientUsername);
-  printf("password:%s\n", clientPassword);
+  //printf("username:%s\n", clientUsername);
+  //printf("password:%s\n", clientPassword);
 
   for(int i = 0; i<usersTotal; i++)
   {
@@ -251,7 +292,7 @@ void runServer()
         bzero(buf, READ_BUFFER);
       }
 
-      printf("OUTSIDE the loop\n");
+      printf("\n");
       exit(EXIT_SUCCESS);
 
     }
@@ -260,14 +301,7 @@ void runServer()
 
 }
 
-//create directory if not present
-void createDirectory(char * directoryName)
-{
-	if(stat(directoryName, &st) == -1)
-	{
-		mkdir(directoryName, 0700);
-	}
-}
+
 
 void readConfigFile(char *rootFolder)
 {
