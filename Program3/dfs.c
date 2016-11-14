@@ -16,6 +16,7 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <dirent.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
@@ -139,14 +140,46 @@ void handlePut(int connfd)
 
 }
 
-void handleGet()
+void handleGet(int connfd)
 {
-  printf("Handling GET command ... \n");
+  int bytesRead;
+  int bytesSent;
+  char* readBuffer = malloc(READ_BUFFER);
+  char* sendBuffer = malloc(READ_BUFFER);
+  char* filename = malloc(READ_BUFFER);
+
+  printf("Server: Handling GET command ... \n");
+
+  //get the file name from the client
+  if((bytesRead = recv(connfd, readBuffer, READ_BUFFER,0)<0))
+  {
+    printf("ERROR: Receiving file name\n");
+  }
+  else
+  {
+    strcpy(filename, readBuffer);
+    //printf("Filename sent %s\n", filename);
+  }
+
+  DIR *d;
+  struct dirent *dir;
+  //new path
+  d = opendir("./DFS4/Alice");
+
+  if(d)
+  {
+    while((dir = readdir(d)) != NULL)
+    {
+      printf("%s\n", dir->d_name);
+    }
+    closedir(d);
+  }
+
 }
 
 void handleList()
 {
-  printf("Handling LIST command ...\n");
+  printf("Server: Handling LIST command ...\n");
 }
 
 void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
@@ -168,12 +201,13 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   //printf("username:%s\n", clientUsername);
   //printf("password:%s\n", clientPassword);
 
+  sleep(10);
   for(int i = 0; i<usersTotal; i++)
   {
     //printf("Inside loop: username %s, password %s\n", userNames[i], password[i]);
       if(strcmp(clientUsername, userNames[i]) == 0 && strcmp(clientPassword, password[i]) == 0)
       {
-        //printf("MSG: Found\n");
+        printf("MSG: Found\n");
         strcpy(message, "valid");
       }
       else
@@ -249,6 +283,7 @@ void runServer()
 
     clilen = sizeof(cliaddr);
     //accept a connection
+
     connfd = accept (listenfd, (struct sockaddr *) &cliaddr, &clilen);
     printf("%s\n","MSG: Received request...");
 
@@ -273,7 +308,7 @@ void runServer()
         }
         else if(strncmp(buf, "GET", 3) == 0)
         {
-          handleGet();
+          handleGet(connfd);
         }
         else if(strncmp(buf, "LIST", 4) == 0)
         {

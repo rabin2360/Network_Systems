@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <signal.h>
@@ -13,6 +15,7 @@
 #include <memory.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include <time.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
@@ -144,129 +147,12 @@ void splitFile(char * filename)
 	}
 }
 
-char* processGET(char* path)
-{
-	char * getCommand = malloc(READ_BUFFER);
-	
-	return getCommand;
-}
-
-void processPUT(char* filepath)
-{
-	//split the files into chunks
-	splitFile(filepath);
-
-
-}
-
-char* processLIST(char * path)
+void processPUT(int sock, char * message, char * destinationFolder)
 {
 
-	char * listCommand = malloc(READ_BUFFER);
-
-	return listCommand;
-}
-
-bool validateUser(int sock)
-{
-	char * usernameAndPassword = malloc(FILENAME);
-	char * server_reply = malloc(FILENAME);
-
-	strcpy(usernameAndPassword, "valid&");
-	strcat(usernameAndPassword, username);
-	strcat(usernameAndPassword, "&");
-	strcat(usernameAndPassword, password);
-
-	//printf("username and password: %s\n", usernameAndPassword);
-
-	if( send(sock, usernameAndPassword, strlen(usernameAndPassword), 0) < 0)
-	{
-		return false;
-	}
-	else
-	{
-		//server reply
-		if( recv(sock , server_reply , FILENAME , 0) < 0)
-        {
-            printf("ERROR: Recv failed for user authorization.\n");
-            return false;
-        }
-        else
-        {
-        	if(strncmp(server_reply, "valid",5) == 0)
-        	{
-        		//printf("%s\n", server_reply);
-        		return true;
-        	}
-        	/*
-        	else
-        		printf("%s\n", server_reply);
-        	*/	
-        }
-	}
-
-	return false;
-}
-
-void connectToServer(char * serverIP, char* portNum, char * messageTag, char * message, char * destinationFolder)
-{
-
-	int sock;
-    struct sockaddr_in server;
-    //char message[READ_BUFFER];
     char server_reply[READ_BUFFER];
-    int read_size;
-    bool loopControl;
 
-    //Create socket
-    sock = socket(AF_INET , SOCK_STREAM , 0);
-    if (sock == -1)
-    {
-        printf("ERROR: Could not create socket %s:%s\n", serverIP, portNum);
-    }
-    printf("MSG: Socket created %s:%s\n", serverIP, portNum);
-
-    server.sin_addr.s_addr = inet_addr(serverIP);
-    server.sin_family = AF_INET;
-    server.sin_port = htons(atoi(portNum));
-
-    //Connect to remote server
-    if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
-    {
-        printf("ERROR: Connect failed. %s:%s\n\n", serverIP, portNum);
-        close(sock);
-        return;
-    }
-
-    printf("MSG: Connected. %s:%s\n", serverIP, portNum);
-
-    loopControl = validateUser(sock);
-
-    if(!loopControl){
-    	printf("ERROR: Invalid username and/or password\n. Please check dfc.conf file for %s:%s\n", serverIP, portNum);
-    	return;
-    }
-    else
-    	printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
-
-        
-  		//determine if it is put/get or list
-
-
-        //Send message tag
-        if( send(sock , messageTag , strlen(messageTag) , 0) < 0)
-        {
-            printf("ERROR: Send failed\n");
-            //return;
-        }
-        else
-        {
-        	printf("MSG: Sending message ..\n");
-		}
-
-		if(strcmp(messageTag, "PUT") == 0){
-
-			//open the file
+		//open the file
 			int fileFd;
 			fileFd = open(message, O_RDONLY);
 			if(send(sock, message, strlen(message), 0)<0)
@@ -330,7 +216,210 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
         	bzero(&(server_reply), sizeof(server_reply));
 
         close(sock); 
+}
+
+void processGET(int sock, char *filename)
+{
+	printf("Client handling GET\n");
+	int bytesSent;
+	int bytesRead;
+	char* sendBuffer = malloc(READ_BUFFER);
+	char* readBuffer = malloc(READ_BUFFER);
+
+	strcpy(sendBuffer, filename);
+	printf("MSG: Sending filename %s\n", sendBuffer);
+	
+	if((bytesSent = send(sock, sendBuffer, READ_BUFFER, 0)>0))
+	{
+		printf("ERROR: Sending message - process GET\n");
+	}
+	//<IDEA>get the files
+
+	//contact each server and get the file -ignore first character
+	//match the middle substring
+
+	//recv the file chunks. if all required chunks received,
+	//then go ahead and call for combine
+
+	//call for combine
+
+	//do md5 check
+
+}
+
+char* processLIST(char * path)
+{
+
+	char * listCommand = malloc(READ_BUFFER);
+
+	return listCommand;
+}
+
+bool validateUser(int sock)
+{
+	char * usernameAndPassword = malloc(FILENAME);
+	char * server_reply = malloc(FILENAME);
+
+	strcpy(usernameAndPassword, "valid&");
+	strcat(usernameAndPassword, username);
+	strcat(usernameAndPassword, "&");
+	strcat(usernameAndPassword, password);
+
+	//printf("username and password: %s\n", usernameAndPassword);
+
+	if( send(sock, usernameAndPassword, strlen(usernameAndPassword), 0) < 0)
+	{
+		return false;
+	}
+	else
+	{
+		//server reply
+		if( recv(sock , server_reply , FILENAME , 0) < 0)
+        {
+        	if(errno != EAGAIN && errno != EWOULDBLOCK)
+            	printf("ERROR: Recv failed for user authorization.\n");
+            else
+            	printf("ERROR: Timeout\n");
+            return false;
+        }
+        else
+        {
+        	if(strncmp(server_reply, "valid",5) == 0)
+        	{
+        		//printf("%s\n", server_reply);
+        		return true;
+        	}
+        	/*
+        	else
+        		printf("%s\n", server_reply);
+        	*/	
+        }
+	}
+
+	return false;
+}
+
+void connectToServer(char * serverIP, char* portNum, char * messageTag, char * message, char * destinationFolder)
+{
+
+	int sock;
+    struct sockaddr_in server;
+    //char message[READ_BUFFER];
+    int read_size;
+    bool loopControl;
+    
+    fd_set fdset;
+    struct timeval tv;
+    long arg;
+    socklen_t lon;
+    int valopt;
+
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+
+    //Create socket
+    sock = socket(AF_INET , SOCK_STREAM , 0);
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(struct timeval));
+    arg = fcntl(sock, F_GETFL, NULL);
+    arg |= O_NONBLOCK;
+    fcntl(sock, F_SETFL, arg);
+
+    if (sock == -1)
+    {
+        printf("ERROR: Could not create socket %s:%s\n", serverIP, portNum);
     }
+    printf("MSG: Socket created %s:%s\n", serverIP, portNum);
+
+    server.sin_addr.s_addr = inet_addr(serverIP);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(atoi(portNum));
+
+    //Connect to remote server
+    int res = connect(sock , (struct sockaddr *)&server , sizeof(server));
+
+    if (res < 0)
+    {
+    	if(errno == EINPROGRESS)
+    	{
+    		//for timeout
+    		FD_ZERO(&fdset);
+    		FD_SET(sock, &fdset);
+
+    	if(select (sock+1, NULL, &fdset, NULL, &tv) > 0)
+    	{
+	    	lon = sizeof(int);
+	    	getsockopt(sock, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon);
+
+	    	if(valopt)
+	    	{
+			    printf("ERROR: Error in connection(). %s:%s\n", serverIP, portNum); 
+			    close(sock);
+			    return;   		
+	    	}
+	    }
+	    
+	    else
+	    	{
+
+	    		printf("ERROR: Timeout. %s:%s\n\n", serverIP, portNum);
+	    		close(sock);
+	    		return;
+	    	}
+	    }
+	    else
+	    {
+	    	printf("ERROR: Error connectiong\n\n");
+	    	close(sock);
+	    	return;
+	    }
+
+    	}
+
+        printf("MSG: Connected. %s:%s\n\n", serverIP, portNum);
+        //close(sock);
+        //return;
+
+
+        //makes you non blocking again
+        arg = fcntl(sock, F_GETFL, NULL);
+        arg &=(~O_NONBLOCK);
+        fcntl(sock, F_SETFL, arg);
+    
+
+
+    loopControl = validateUser(sock);
+
+    if(!loopControl){
+    	printf("ERROR: Invalid username and/or password. Please check dfc.conf file for %s:%s\n", serverIP, portNum);
+    	return;
+    }
+    else
+    	printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
+
+        
+  		//determine if it is put/get or list
+
+
+        //Send message tag
+        if( send(sock , messageTag , strlen(messageTag) , 0) < 0)
+        {
+            printf("ERROR: Send failed\n");
+            //return;
+        }
+        else
+        {
+        	printf("MSG: Sending message ..\n");
+		}
+
+		if(strcmp(messageTag, "PUT") == 0){
+			processPUT(sock, message, destinationFolder);
+    	}
+    	else if(strcmp(messageTag, "GET") == 0)
+    	{
+    		printf("Searching for %s in %s:%s\n", message, serverIP, portNum);
+    		processGET(sock, message);
+    	}
 
 }
 
@@ -404,6 +493,10 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     	else if(strncmp(readBuffer, "GET", 3) == 0)
     	{
     		strcpy(messageTag, "GET");
+
+    		char * tokens = strtok(readBuffer, " \n");
+    		tokens = strtok(NULL, " \n");
+    		strcpy(message, tokens);
     	}
     	else if(strncmp(readBuffer, "LIST", 4) == 0)
     	{
@@ -417,10 +510,11 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 
  		for(int i = 0; i<FILES && send; i++)
  		{
+ 			bzero(message, READ_BUFFER);
+ 				
  			//printf("serverAddr:%s, serverPort: %s\n", serverAddrs[i], serverPorts[i]);
  			if(strncmp(readBuffer, "PUT", 3) == 0)
  			{
- 				bzero(message, READ_BUFFER);
  				strcpy(message, fileChunkNames[i]);
 
  				connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
@@ -428,6 +522,10 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 				bzero(message, READ_BUFFER);
  				strcpy(message, fileChunkNames[(i+1)%FILES]);
 
+ 			}
+ 			else if (strncmp(readBuffer, "GET", 3) == 0)
+ 			{
+ 				//strcpy(message,)
  			}
 
  			connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
