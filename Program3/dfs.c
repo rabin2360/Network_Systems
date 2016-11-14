@@ -45,64 +45,57 @@ void handlePut(int connfd)
   char endOfMessage[READ_BUFFER];
   
   char *filename = malloc(READ_BUFFER);
-  int fileFd;
+  //int fileFd;
+  int fileFd2;
   int writtenBytes;
+
+  char *fileLocation = malloc(READ_BUFFER);
+  //strcpy(fileLocation, "./");
+  strcpy(fileLocation, rootFolder);
+  strcat(fileLocation, "/");
+  strcat(fileLocation, clientUsername);
+  strcat(fileLocation, "/r");
 
   bytesRead = recv(connfd, buf, READ_BUFFER,0);
   strncpy(filename, buf, bytesRead);
-  printf("Filename: %s\n", filename);
-  fileFd = open(filename, O_RDWR | O_CREAT, 0777);
+  strcat(fileLocation, filename);
+
+  printf("File Location: %s\n", fileLocation);
+  //fileFd = open(filename, O_RDWR | O_CREAT, 0777);
+  fileFd2 = open(fileLocation, O_RDWR | O_CREAT, 0777);
+
+  if(fileFd2 == -1)
+    printf("ERROR opening file\n");
 
   bzero(buf, READ_BUFFER);
   strcpy(buf, "OK");
   send(connfd, buf, strlen(buf), 0);
 
   bytesRead = recv(connfd, buf, READ_BUFFER,0);
-  printf("Filesize: %s\n", buf);
+  //printf("Filesize: %s\n", buf);
 
 
   int fileSizeBuffer = atoi(buf);
   char *fileContent = malloc(fileSizeBuffer);
-  printf("Before file writing\n");
-  bytesRead = recv(connfd, fileContent, fileSizeBuffer, 0);
-  writtenBytes = write(fileFd, fileContent, bytesRead);
-  close(fileFd);
-  printf("After file writing\n");
+  printf("Allocated space %d\n", fileSizeBuffer);
+  //printf("Before file writing\n");
 
-  /*bzero(buf, READ_BUFFER);
-  strcpy(buf, "OK");
-  send(connfd, buf, strlen(buf), 0);
-*/
+  int cumBytesRead = 0;
+  while((bytesRead = recv(connfd, fileContent, fileSizeBuffer, 0))>0){
+
+  //printf("Bytes received %d\n", bytesRead);
+  //writtenBytes = write(fileFd, fileContent, strlen(fileContent));
+  cumBytesRead += bytesRead;
+  writtenBytes = write(fileFd2, fileContent, bytesRead);
+  bzero(fileContent, fileSizeBuffer);
+    printf("bytes read %d cum bytes: %d\n", bytesRead, cumBytesRead);
+
+  }
+  //close(fileFd);
+  close(fileFd2);
   
-  /*while((bytesRead = recv(connfd, buf, READ_BUFFER,0))>0)
-  {
-      writtenBytes = write(fileFd, fileContent, bytesRead);
-      printf("writtenBytes %d, bytesRead %d\n", writtenBytes, bytesRead);
-      bzero(fileContent, READ_BUFFER);
-  }
-*/
+  //printf("After file writing\n");
 
-  //printf("Data: %s\n", buf);
-  //received done
-  //bzero(buf, READ_BUFFER);
-  /*bytesRead = recv(connfd, endOfMessage, READ_BUFFER,0);
-  
-  //compare
-  if(strcmp(endOfMessage, "DONE"))
-  {
-    printf("End of file reading\n");
-  }
-  else
-  {
-   
-    printf("Received %s\n", buf);
-  }
-
-
-  bzero(buf, READ_BUFFER);
-  strcpy(buf, "FINISH");
-  send(connfd, buf, strlen(buf), 0);
-*/
 }
 
 void handleGet()
@@ -131,8 +124,8 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   tokens = strtok(NULL, "&");
   strcpy(clientPassword, tokens);
 
-  //printf("username:%s\n", tempUsername);
-  //printf("password:%s\n", tempPassword);
+  printf("username:%s\n", clientUsername);
+  printf("password:%s\n", clientPassword);
 
   for(int i = 0; i<usersTotal; i++)
   {
@@ -141,13 +134,17 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
       {
         //printf("MSG: Found\n");
         strcpy(message, "valid");
-        bytesSent = send(connfd, message, strlen(message), 0);
-
-        if(bytesSent < 0)
-          printf("ERROR: Sending valid user message\n");
-
-        return;
       }
+      else
+      {
+        strcpy(message, "Invalid Username/Password. Please try again.\n");
+      }
+
+      bytesSent = send(connfd, message, strlen(message), 0);
+
+      if(bytesSent < 0)
+        printf("ERROR: Sending valid user message\n");
+
   }
 
   //printf("MSG: Not found\n");
@@ -243,7 +240,7 @@ void runServer()
         }
         else
         {
-          printf("ERROR: Message not recognized, %s.\n", clientUsername);
+          printf("ERROR: Message not recognized, %s!. Msg: %s.\n", clientUsername, buf);
         }
 
         n = send(connfd, buf, strlen(buf), 0);
@@ -254,6 +251,7 @@ void runServer()
         bzero(buf, READ_BUFFER);
       }
 
+      printf("OUTSIDE the loop\n");
       exit(EXIT_SUCCESS);
 
     }

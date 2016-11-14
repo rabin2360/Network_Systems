@@ -17,7 +17,7 @@
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
 #define SERVERS 4
-#define FILES 2
+#define FILES 4
 #define FILENAME 100
 #define LOCALHOST "127.0.0.1"
 
@@ -29,6 +29,8 @@ char fileChunkNames[SERVERS][FILENAME];
 char *username;
 char *password;
 
+char putCommands[3][FILENAME];
+int putCommandsNum;
 
 void checkIntegrity(char *file1, char *file2)
 {
@@ -89,7 +91,8 @@ void splitFile(char * filename)
     int smallerFileFd;
     int currentFileNum = 0;
     char smallFileName[FILENAME];
-    sprintf(smallFileName, "file%d.txt",currentFileNum);
+ 	sprintf(smallFileName, "%s.%d", filename, currentFileNum);
+    //sprintf(smallFileName, "%d",currentFileNum);
     printf("%s\n", smallFileName);
 
 	if(fd != -1)
@@ -116,7 +119,7 @@ void splitFile(char * filename)
 				close(smallerFileFd);
 				currentFileNum++;
 
-			    sprintf(smallFileName, "file%d.txt",currentFileNum);
+			    sprintf(smallFileName, "%s.%d",filename, currentFileNum);
     			printf("%s\n", smallFileName);
 				strcpy(fileChunkNames[currentFileNum],smallFileName);
 		
@@ -185,15 +188,19 @@ bool validateUser(int sock)
 		//server reply
 		if( recv(sock , server_reply , FILENAME , 0) < 0)
         {
-            printf("recv failed");
+            printf("ERROR: Recv failed for user authorization.\n");
             return false;
         }
         else
         {
         	if(strncmp(server_reply, "valid",5) == 0)
+        	{
+        		//printf("%s\n", server_reply);
         		return true;
-        	/*else
-        		printf("server reply %s\n", server_reply);
+        	}
+        	/*
+        	else
+        		printf("%s\n", server_reply);
         	*/	
         }
 	}
@@ -201,7 +208,7 @@ bool validateUser(int sock)
 	return false;
 }
 
-void connectToServer(char * serverIP, char* portNum, char * messageTag, char * message)
+void connectToServer(char * serverIP, char* portNum, char * messageTag, char * message, char * destinationFolder)
 {
 
 	int sock;
@@ -243,10 +250,6 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     	printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
 
         
-    //printf("Enter message : ");
-    //bzero(message, READ_BUFFER);
-    //fgets(message, READ_BUFFER, stdin);
-         
   		//determine if it is put/get or list
 
 
@@ -270,10 +273,7 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 			fileFd = open(message, O_RDONLY);
 			if(send(sock, message, strlen(message), 0)<0)
 			{
-				printf("Problem gate\n");
-			}
-			else{
-				printf("Filename sent\n");
+				printf("ERROR: Cannot send filename.\n");
 			}
 
 			bzero(message, sizeof(message));
@@ -292,60 +292,54 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 
 			if(send(sock, message, strlen(message), 0)<0)
 			{
-				printf("Problem gate\n");
-			}
-			else{
-				printf("File size sent\n");
+				printf("ERROR: Cannot send the file size.\n");
 			}
 			
 			bzero(fileContent, READ_BUFFER);
 			bzero(message, strlen(message));
 
+
+			cumReadSize = 0;
+			int sentData = 0;
+			int cumSent = 0;
+
 			while((bytesRead = read(fileFd, fileContent, READ_BUFFER)) > 0){
-				//cumReadSize += bytesRead;
-				send(sock, message, strlen(message), 0);
-				printf("BytesRead %d\n", bytesRead);
+				cumReadSize += bytesRead;
+				sentData = send(sock, fileContent, bytesRead, 0);
+
+				if(sentData < 0)
+				{
+					printf("Error sending data");
+				}
+				/*
+				else
+				{
+					cumSent += sentData;
+					printf("Sent so far: %d\n", sentData);
+				}
+				*/
+
 				bzero(fileContent, READ_BUFFER);
-				bzero(message, strlen(message));
 			}
+
+
+			printf("Final cum size: %d cum sent: %d\n", cumReadSize, cumSent);
 
 			close(fileFd);
-			/*printf("Before sending END!\n");
-			char * endOfMessage = malloc(READ_BUFFER);
-			strcpy(endOfMessage, "data for file\n");
-			//strcpy(endOfMessage, "DONE\n");
-
-			if(send(sock, endOfMessage, strlen(endOfMessage), 0)<0)
-			{
-				printf("ERROR: less than zero\n");
-			}
-			else
-			{
-				printf("MSG: Message sent");
-			}*/
-		}
-        	//Receive a reply from the server
-       /* if( recv(sock , server_reply , READ_BUFFER , 0) < 0)
-        {
-            printf("ERROR: Recv failed\n");
-        }
-        else
-        {
-        	printf("MSG: Server reply :");
-        	printf("%s\n",server_reply);
-        }
-         */
 
         bzero(&(server_reply), sizeof(server_reply));
 
         close(sock); 
     }
 
+}
+
  void runClient()
  {
  	char *readBuffer = malloc(READ_BUFFER);
  	char *message = malloc(READ_BUFFER);
  	char *messageTag = malloc(READ_BUFFER);
+ 	char * destinationFolder = malloc(READ_BUFFER);
 
  	char *serverAddrs[SERVERS];
  	char *serverPorts[SERVERS];
@@ -369,30 +363,51 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
 
  		printf("Enter message : ");
 
+ 		//resetting the variables after each loop
     	bzero(readBuffer, READ_BUFFER);
     	bzero(messageTag, READ_BUFFER);
     	bzero(message, READ_BUFFER);
+    	*message = '\0';
+    	*destinationFolder = '\0';
+		send = true;
 
     	fgets(readBuffer, READ_BUFFER, stdin);
-    	send = true;
+    	
 
     	if(strncmp(readBuffer, "PUT", 3) == 0)
     	{
     		char * tokens = strtok(readBuffer, " \n");
-    		tokens = strtok(NULL, " \n");
-    		strcpy(messageTag, "PUT");
-    		strcpy(message, tokens);
+    		putCommandsNum = 0;
+
+    		while(tokens != NULL)
+    		{
+    			//save
+    			strcpy(putCommands[putCommandsNum], tokens);
+    			putCommandsNum++;
+    			tokens = strtok(NULL, " \n");
+    		}
+
+    		//tokens = strtok(NULL, " \n");
+    		strcpy(messageTag, putCommands[0]);
+    		strcpy(message, putCommands[1]);
     		splitFile(message);
+
+    		if(putCommandsNum == 3)
+    			strcpy(destinationFolder, putCommands[2]);
+
+    		printf("Total num %d\n", putCommandsNum);
+    		for(int i = 0; i<putCommandsNum; i++)
+    		{
+    			printf("%s\n",putCommands[i]);
+    		}
     	}
     	else if(strncmp(readBuffer, "GET", 3) == 0)
     	{
     		strcpy(messageTag, "GET");
-    		*message = '\0';
     	}
     	else if(strncmp(readBuffer, "LIST", 4) == 0)
     	{
     		strcpy(messageTag, "LIST");
-    		*message = '\0';
     	}
     	else
     	{
@@ -407,10 +422,15 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
  			{
  				bzero(message, READ_BUFFER);
  				strcpy(message, fileChunkNames[i]);
+
+ 				connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
+				
+				bzero(message, READ_BUFFER);
+ 				strcpy(message, fileChunkNames[(i+1)%FILES]);
+
  			}
 
-
- 			connectToServer(serverAddrs[i], serverPorts[i], messageTag, message);
+ 			connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
  		}
 
 	 }
