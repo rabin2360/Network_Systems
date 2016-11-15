@@ -16,13 +16,13 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <time.h>
+#include <openssl/md5.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
 #define SERVERS 4
 #define FILES 4
 #define FILENAME 100
-#define LOCALHOST "127.0.0.1"
 
 //variables used across functions
 char *serverRoots[SERVERS];
@@ -34,6 +34,102 @@ char *password;
 
 char putCommands[3][FILENAME];
 int putCommandsNum;
+int fileHashVal;
+
+//bit XOR encryption
+void encryptDecriptFile(char * filename, char * key)
+{
+	char *outputFileName = malloc(FILENAME);
+	strcpy(outputFileName, "e_");
+	strcat(outputFileName, filename);
+
+	int bytesRead, writtenBytes;
+	int cumulativeBytesRead = 0;
+	char *fileContent;
+	int fileSize;
+	int fd, outputFd;
+
+	fd = open(filename, O_RDONLY);
+	fileSize =  lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
+	fileContent = malloc(READ_BUFFER);
+
+	char * outputFileContent = malloc(fileSize);
+
+	outputFd = open(outputFileName, O_RDWR | O_CREAT, 0777);
+
+	while((bytesRead = read(fd, fileContent, READ_BUFFER))>0)
+	{
+		for(int i = 0; i<bytesRead; i++)
+		{
+			outputFileContent[i] = fileContent[i]^key[i%(sizeof(key)/sizeof(char))];
+		}
+
+		writtenBytes = write(outputFd, outputFileContent, bytesRead);
+		cumulativeBytesRead += bytesRead;
+	}
+
+	close(fd);
+
+/*
+	for(int i = 0; i<fileSize; i++)
+	{
+		outputFileContent[i] = fileContent[i]^key[i%(sizeof(key)/sizeof(char))];
+		//strcpy(outputFileContent[i], fileContent[i]^key[i%(sizeof(key)/sizeof(char))]);
+	}
+
+	writtenBytes = write(outputFd, outputFileContent, fileSize);
+*/
+	close(outputFd);
+
+	/*int testFd;
+	int testOutput;
+	testFd = open(outputFileName, O_RDONLY);
+	testOutput = open("fileEncrypt.txt", O_RDWR | O_CREAT, 0777);
+	bzero(outputFileContent, fileSize);
+	bzero(fileContent, fileSize);
+
+	while((bytesRead = read(testFd, fileContent, fileSize))>0)
+	{
+		cumulativeBytesRead += bytesRead;
+	}
+
+	for(int i = 0; i<fileSize; i++)
+	{
+		outputFileContent[i] = fileContent[i]^key[i%(sizeof(key)/sizeof(char))];
+		//strcpy(outputFileContent[i], fileContent[i]^key[i%(sizeof(key)/sizeof(char))]);
+	}
+	writtenBytes = write(testOutput, outputFileContent, fileSize);
+
+	close(testFd);
+	close(testOutput);
+	
+
+	/*printf("Filename %s, password: %s\n", filename, key);
+
+	char *testing = "Hello My name is Rabin";
+	int length = strlen(testing);
+	char *output = malloc(length);
+
+
+
+	for(int i = 0; i<length; i++)
+	{
+		output[i] = testing[i] ^ key[i%(sizeof(key)/sizeof(char))];
+	}
+
+
+	printf("Encrypted: %s\n", output);
+
+	for(int i = 0; i<length; i++)
+	{
+		output[i] = output[i] ^ key[i%(sizeof(key)/sizeof(char))];
+	}
+
+
+	printf("Decrypted: %s\n", output);
+	*/
+}
 
 void checkIntegrity(char *file1, char *file2)
 {
@@ -74,6 +170,77 @@ void combineFiles()
 	}
 }
 
+char *str2md5(const char * str, int length)
+{
+  int n;
+  MD5_CTX c;
+  unsigned char digest[16];
+  char * out = (char*) malloc(33);
+
+  MD5_Init(&c);
+
+  while(length > 0)
+    {
+      if(length > 512)
+	MD5_Update(&c, str, 512);
+      else
+	MD5_Update(&c, str, length);
+
+      length -=512;
+      str += 512;
+    }
+
+  MD5_Final(digest, &c);
+
+  for(n = 0; n<16; ++n)
+    {
+    	//printf("digest: %d\n", (unsigned int)digest[n]);
+      snprintf(&(out[n*2]), 16*2, "%02x", (unsigned int)digest[n]);
+    }
+
+  return out;
+}
+
+int getMd5Hash(char *filename)
+{
+	int bytesRead;
+	int cumulativeBytesRead = 0;
+	char *fileContent;
+	int fileSize;
+	int fd;
+
+	fd = open(filename, O_RDONLY);
+	fileSize =  lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
+	fileContent = malloc(fileSize);
+
+	while((bytesRead = read(fd, fileContent, fileSize))>0)
+	{
+		cumulativeBytesRead += bytesRead;
+	}
+
+	close(fd);
+	
+	//calculate md5
+	 char * calculatedMd5 = str2md5(fileContent, cumulativeBytesRead/sizeof(char));
+	//printf("Md5 Hash %s\n", calculatedMd5);
+	
+	int result = 0;
+	int length = strlen(calculatedMd5);
+
+	//convert the hash string to int
+	for(int i = 0; i<length; i++)
+	{
+		result = result*10 + (calculatedMd5[i] - '0');
+		//printf("result: %d\n", result);
+	}
+
+	result = abs(result) % SERVERS;
+	//printf("result: %d\n", result);
+
+	return result;
+}
+
 //split the input file into 4 chunks
 //split the file in x-chunks
 void splitFile(char * filename)
@@ -94,7 +261,7 @@ void splitFile(char * filename)
     int smallerFileFd;
     int currentFileNum = 0;
     char smallFileName[FILENAME];
- 	sprintf(smallFileName, "%s.%d", filename, currentFileNum);
+ 	sprintf(smallFileName, "%s.%d", filename, currentFileNum+1);
     //sprintf(smallFileName, "%d",currentFileNum);
     printf("%s\n", smallFileName);
 
@@ -122,7 +289,7 @@ void splitFile(char * filename)
 				close(smallerFileFd);
 				currentFileNum++;
 
-			    sprintf(smallFileName, "%s.%d",filename, currentFileNum);
+			    sprintf(smallFileName, "%s.%d",filename, currentFileNum+1);
     			printf("%s\n", smallFileName);
 				strcpy(fileChunkNames[currentFileNum],smallFileName);
 		
@@ -155,6 +322,13 @@ void processPUT(int sock, char * message, char * destinationFolder)
 		//open the file
 			int fileFd;
 			fileFd = open(message, O_RDONLY);
+
+			if(fileFd == -1)
+			{
+				printf("ERROR: Cannot open the file %s\n", message);
+				return;
+			}
+
 			if(send(sock, message, strlen(message), 0)<0)
 			{
 				printf("ERROR: Cannot send filename.\n");
@@ -479,7 +653,18 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     		//tokens = strtok(NULL, " \n");
     		strcpy(messageTag, putCommands[0]);
     		strcpy(message, putCommands[1]);
+
+    		//encrypt file
+    		encryptDecriptFile(message, password);
+
+    		char *testingEncrypt = malloc(READ_BUFFER);
+    		strcpy(testingEncrypt, "e_");
+    		strcat(testingEncrypt, message);
+
+    		encryptDecriptFile(testingEncrypt, password);
+
     		splitFile(message);
+    		fileHashVal = getMd5Hash(message);
 
     		if(putCommandsNum == 3)
     			strcpy(destinationFolder, putCommands[2]);
@@ -515,12 +700,17 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
  			//printf("serverAddr:%s, serverPort: %s\n", serverAddrs[i], serverPorts[i]);
  			if(strncmp(readBuffer, "PUT", 3) == 0)
  			{
- 				strcpy(message, fileChunkNames[i]);
+ 				//FIX THIS.... JUST put the value in array and then rotate then by the
+ 				//file HashVal
+ 				fileHashVal = 3;
 
+ 				strcpy(message, fileChunkNames[abs(i-fileHashVal)%FILES]);
+ 				printf("File location %d\n", (abs(i-fileHashVal)%FILES));
  				connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
 				
 				bzero(message, READ_BUFFER);
- 				strcpy(message, fileChunkNames[(i+1)%FILES]);
+ 				strcpy(message, fileChunkNames[abs(i+1-fileHashVal)%FILES]);
+ 				printf("File location %d\n", (abs(i+1-fileHashVal)%FILES));
 
  			}
  			else if (strncmp(readBuffer, "GET", 3) == 0)

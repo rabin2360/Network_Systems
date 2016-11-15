@@ -201,7 +201,7 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
   //printf("username:%s\n", clientUsername);
   //printf("password:%s\n", clientPassword);
 
-  sleep(10);
+  //sleep(10);
   for(int i = 0; i<usersTotal; i++)
   {
     //printf("Inside loop: username %s, password %s\n", userNames[i], password[i]);
