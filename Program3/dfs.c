@@ -19,6 +19,7 @@
 #include <dirent.h>
 
 #define READ_BUFFER 1024
+#define NAME 100
 #define MAXBUFSIZE 1024
 #define USERS 1000
 #define CONFIG_FILE "dfs.conf"
@@ -32,6 +33,9 @@ char * password[USERS];
 int usersTotal;
 char * clientUsername;
 char * clientPassword;
+char foundFileChunks[USERS][NAME];
+pthread_mutex_t lock;
+pthread_mutex_t lock2;
 
 //for using stat and directory creation
 struct stat st = {0};
@@ -49,6 +53,7 @@ void handlePut(int connfd)
 {
   printf("Handling PUT command... \n");
 
+ //pthread_mutex_lock(&lock);
  //get the file name
   int bytesRead;
   char buf[READ_BUFFER];
@@ -61,7 +66,7 @@ void handlePut(int connfd)
 
   char *fileLocation = malloc(READ_BUFFER);
 
-
+  //receiving file name
   bytesRead = recv(connfd, buf, READ_BUFFER,0);
   strncpy(filename, buf, bytesRead);
   //strcat(fileLocation, filename);
@@ -70,6 +75,7 @@ void handlePut(int connfd)
   strcpy(buf, "FILENAME");
   send(connfd, buf, strlen(buf), 0);
 
+  //receiving folder
   bytesRead = recv(connfd, buf, READ_BUFFER,0);
   char *folderName = malloc(READ_BUFFER);
   strncpy(folderName, buf, bytesRead);
@@ -78,6 +84,7 @@ void handlePut(int connfd)
 
     strcpy(fileLocation, rootFolder);
     strcat(fileLocation, "/");
+    strcat(fileLocation, clientUsername);
 
   //int fileSizeBuffer = atoi(buf);
   if(strncmp(folderName, "null", 3) != 0)
@@ -85,6 +92,7 @@ void handlePut(int connfd)
     //printf("Inside: %s\n", folderName);
     char * tempDirectory = malloc(READ_BUFFER);
     strcpy(tempDirectory, fileLocation);
+    strcat(tempDirectory, "/");
     strcat(tempDirectory, folderName);
     //create folder
     createDirectory(tempDirectory);
@@ -102,19 +110,20 @@ void handlePut(int connfd)
 
       //strcpy(fileLocation, "./");
 
-    strcat(fileLocation, clientUsername);
     strcat(fileLocation, "/r");
   }
 
   strcat(fileLocation, filename);
 
-
+  remove(fileLocation);
   //fileFd = open(filename, O_RDWR | O_CREAT, 0777);
   fileFd2 = open(fileLocation, O_RDWR | O_CREAT, 0777);
 
   if(fileFd2 == -1)
-    printf("ERROR opening file - %s\n", fileLocation);
-
+  {
+    printf("ERROR opening file\n");
+    return;
+  }
   //printf("File Location: %s\n", fileLocation);
   
 
@@ -123,63 +132,225 @@ void handlePut(int connfd)
   //printf("Before file writing\n");
 
   int cumBytesRead = 0;
+  //printf("RECEIVING: %s\n", fileLocation);
+  //sleep(5);
+  //printf("OUTSIDE LOOP\n");
   while((bytesRead = recv(connfd, fileContent, READ_BUFFER, 0))>0){
 
   //printf("Bytes received %d\n", bytesRead);
   //writtenBytes = write(fileFd, fileContent, strlen(fileContent));
   cumBytesRead += bytesRead;
   writtenBytes = write(fileFd2, fileContent, bytesRead);
-  bzero(fileContent, READ_BUFFER);
+  //printf("%s", fileContent);
+  //bzero(fileContent, bytesRead);
     //printf("bytes read %d cum bytes: %d\n", bytesRead, cumBytesRead);
-
+  //printf("Inside here\n");
   }
+
+  //printf("END OF THE FILE\n");
+  //printf("\n\n");
   //close(fileFd);
   close(fileFd2);
-  
   //printf("After file writing\n");
 
+
+  //pthread_mutex_unlock(&lock);
+
+  //printf("DONE PUTTING\n");
+  close(connfd);
 }
+
 
 void handleGet(int connfd)
 {
+  //pthread_mutex_lock(&lock2);
+
   int bytesRead;
   int bytesSent;
+  int fileFd;
   char* readBuffer = malloc(READ_BUFFER);
   char* sendBuffer = malloc(READ_BUFFER);
-  char* filename = malloc(READ_BUFFER);
+  char* fileContent = malloc(READ_BUFFER);
 
-  printf("Server: Handling GET command ... \n");
+  char * directoryPath = malloc(NAME);
+  char * filePath = malloc(NAME);
+
+  char* filename = malloc(READ_BUFFER);
+  char* message = malloc(NAME);
+  char* foundSubStr = malloc(NAME);
+  int foundFiles = 0;
+
+  //printf("Server: Handling GET command ... \n");
 
   //get the file name from the client
-  if((bytesRead = recv(connfd, readBuffer, READ_BUFFER,0)<0))
+  if((bytesRead = recv(connfd, readBuffer, READ_BUFFER,0))<0)
   {
-    printf("ERROR: Receiving file name\n");
+    printf("ERROR: Receiving file name to handle GET.\n");
+    return;
   }
-  else
-  {
+
     strcpy(filename, readBuffer);
     //printf("Filename sent %s\n", filename);
-  }
 
-  DIR *d;
-  struct dirent *dir;
-  //new path
-  d = opendir("./DFS4/Alice");
+    bzero(readBuffer, READ_BUFFER);
+    //getting the directory name
 
+    if((bytesRead = recv(connfd, readBuffer, READ_BUFFER,0))<0)
+    {
+      printf("ERROR: Receiving the folder name GET.\n");
+    }
+
+    char *folderName = malloc(READ_BUFFER);
+    strncpy(folderName, readBuffer, bytesRead);
+    printf("MSG: Destination folder received %s\n", folderName);
+
+    DIR *d;
+    struct dirent *dir;
+    strcpy(directoryPath, ".");
+    strcat(directoryPath, "/");
+    strcat(directoryPath, rootFolder);
+    strcat(directoryPath, "/");
+    strcat(directoryPath, clientUsername);
+    
+    if(strncmp(folderName, "null", 3)!= 0)
+    {
+      strcat(directoryPath, "/");
+      strcat(directoryPath, folderName);
+    }
+
+   printf("Directory path %s\n", directoryPath);
+   
+    //d = opendir("./DFS4/Alice");
+    d = opendir(directoryPath);
+  
   if(d)
   {
-    while((dir = readdir(d)) != NULL)
-    {
-      printf("%s\n", dir->d_name);
-    }
-    closedir(d);
-  }
+      while((dir = readdir(d)) != NULL)
+      {
+        //printf("%s\n", dir->d_name);
+        foundSubStr = strstr(dir->d_name, filename);
 
+        if(foundSubStr != NULL)
+        {
+          strcpy(foundFileChunks[foundFiles],dir->d_name);
+          foundFiles++;
+
+          //printf("Sub string: %s, true string: %s, path %s\n",foundSubStr, dir->d_name, foundFileChunks[foundFiles]);
+          
+        }
+        else
+          printf("Not substring %s\n", dir->d_name);
+      }
+
+    closedir(d);
+    }
+    else if(ENOENT == errno)
+    {
+      printf("ERROR: Directory %s\n doesn't exist\n", directoryPath);
+    }
+
+
+    char *foundFilesStr;
+    sprintf(foundFilesStr, "%d", foundFiles);
+
+    printf("Total substrings found %s\n", foundFilesStr);
+
+    bzero(message, READ_BUFFER);
+    strcpy(message, foundFilesStr);
+
+    if((bytesSent = send(connfd, message, strlen(message), 0))<0)
+    {
+      printf("ERROR: Error sending found message to client\n");
+    }
+
+
+    for(int i = 0; i<foundFiles; i++)
+    {
+      bzero(message, READ_BUFFER);
+      strcpy(message, foundFileChunks[i]);
+      printf("Message sent %s\n", foundFileChunks[i]);
+
+      if((bytesSent = send(connfd, foundFileChunks[i], strlen(foundFileChunks[i]), 0))<0)
+      {
+        printf("ERROR: Error sending found message to client\n");
+      }
+
+      bzero(message, READ_BUFFER);
+      if((bytesRead = recv(connfd, message, READ_BUFFER, 0))<0)
+      {
+        printf("ERROR: Error receiving the file name\n");
+      }
+
+      printf("Got message %s\n", message);
+
+      //add before opening the files
+      bzero(filePath, NAME);
+      strcpy(filePath, directoryPath);
+      strcat(filePath, "/");
+      strcat(filePath, foundFileChunks[i]);
+
+      printf("Opening %s\n", filePath);
+      
+      int chunkFd = open(filePath, O_RDONLY);
+
+      while((bytesRead = read(chunkFd, fileContent, READ_BUFFER))>0)
+      {
+        if((bytesSent = send(connfd, fileContent, bytesRead, 0))<0)
+        {
+          printf("ERROR: Error sending the file chunk\n");
+        }
+      }
+
+      close(chunkFd);
+      
+      bzero(message, READ_BUFFER);
+      if((bytesRead = recv(connfd, message, READ_BUFFER, 0))<0)
+      {
+        printf("ERROR: No ack for file chunk\n");
+      }
+
+      printf("Got message %s\n", message);    
+    }
+
+        /*
+
+          bzero(message, NAME);
+          strcpy(message, "Found");
+
+          bzero(filePath, NAME);
+          strcpy(filePath, directoryPath);
+          strcat(filePath, "/");
+          strcat(filePath, dir->d_name);
+
+          if((bytesSent = send(connfd, message, strlen(message), 0))<0)
+          {
+            printf("ERROR: Error sending found message to client\n");
+          }
+
+          fileFd = open(filePath, O_RDONLY);
+
+          if(fileFd != -1)
+          {
+            while((bytesRead = read(fileFd, readBuffer, READ_BUFFER)) >0)
+            {
+              //send
+            }
+          }
+          else
+          {
+            printf("ERROR: Opening the file %s. File found but cannot open it.\n", filePath);
+          }
+          */
+
+
+  //pthread_mutex_unlock(&lock2);
+  close(connfd); 
 }
 
 void handleList()
 {
   printf("Server: Handling LIST command ...\n");
+
 }
 
 void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
@@ -327,7 +498,9 @@ void runServer()
         bzero(buf, READ_BUFFER);
       }
 
-      printf("\n");
+      shutdown(connfd, SHUT_RDWR);
+      close(connfd);
+      //printf("\n");
       exit(EXIT_SUCCESS);
 
     }
@@ -395,6 +568,17 @@ int main(int argc, char ** argv)
 		exit(EXIT_FAILURE);
 	}
 
+  if(pthread_mutex_init(&lock, NULL) != 0)
+  {
+    printf("Mutex lock failed\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if(pthread_mutex_init(&lock2, NULL) != 0)
+  {
+    printf("Mutex lock failed\n");
+    exit(EXIT_FAILURE);
+  }
 	//getting and storing root folder
 	rootFolder = malloc(READ_BUFFER);
 	strcpy(rootFolder, argv[1]);
