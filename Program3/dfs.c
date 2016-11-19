@@ -60,27 +60,41 @@ void handlePut(int connfd)
   char endOfMessage[READ_BUFFER];
   
   char *filename = malloc(READ_BUFFER);
-  //int fileFd;
   int fileFd2;
   int writtenBytes;
 
   char *fileLocation = malloc(READ_BUFFER);
 
   //receiving file name
-  bytesRead = recv(connfd, buf, READ_BUFFER,0);
+  if((bytesRead = recv(connfd, buf, READ_BUFFER,0))<0)
+  {
+    printf("ERROR: Did not receive the filename - PUT.\n");
+    close(connfd);
+    return;
+  }
+
   strncpy(filename, buf, bytesRead);
-  //strcat(fileLocation, filename);
 
   bzero(buf, READ_BUFFER);
-  strcpy(buf, "FILENAME");
-  send(connfd, buf, strlen(buf), 0);
+  strcpy(buf, "OK");
+
+  if(send(connfd, buf, strlen(buf), 0)<0)
+  {
+    printf("ERROR: Did not ack for received filename %s\n.", filename);
+    close(connfd);
+    return;
+  }
 
   //receiving folder
-  bytesRead = recv(connfd, buf, READ_BUFFER,0);
+  if((bytesRead = recv(connfd, buf, READ_BUFFER,0)<0))
+  {
+    printf("ERROR: Did not receive the folder to put the file.\n");
+    close(connfd);
+    return;
+  }
+
   char *folderName = malloc(READ_BUFFER);
   strncpy(folderName, buf, bytesRead);
-
-  //printf("Filesize: %s\n", buf);
 
     strcpy(fileLocation, rootFolder);
     strcat(fileLocation, "/");
@@ -106,17 +120,13 @@ void handlePut(int connfd)
   }
   else
   {
-    //printf("Outside: %s\n", folderName);
-
       //strcpy(fileLocation, "./");
-
     strcat(fileLocation, "/r");
   }
 
   strcat(fileLocation, filename);
 
   remove(fileLocation);
-  //fileFd = open(filename, O_RDWR | O_CREAT, 0777);
   fileFd2 = open(fileLocation, O_RDWR | O_CREAT, 0777);
 
   if(fileFd2 == -1)
@@ -128,28 +138,25 @@ void handlePut(int connfd)
   
 
   char *fileContent = malloc(READ_BUFFER);
-  //printf("Allocated space %d\n", fileSizeBuffer);
   //printf("Before file writing\n");
 
   int cumBytesRead = 0;
   //printf("RECEIVING: %s\n", fileLocation);
-  //sleep(5);
   //printf("OUTSIDE LOOP\n");
   while((bytesRead = recv(connfd, fileContent, READ_BUFFER, 0))>0){
 
   //printf("Bytes received %d\n", bytesRead);
   //writtenBytes = write(fileFd, fileContent, strlen(fileContent));
   cumBytesRead += bytesRead;
-  writtenBytes = write(fileFd2, fileContent, bytesRead);
-  //printf("%s", fileContent);
+
+  if((writtenBytes = write(fileFd2, fileContent, bytesRead))<0)
+  {
+      printf("ERROR: Writing to file %s\n", fileLocation);
+  }
   //bzero(fileContent, bytesRead);
-    //printf("bytes read %d cum bytes: %d\n", bytesRead, cumBytesRead);
-  //printf("Inside here\n");
   }
 
   //printf("END OF THE FILE\n");
-  //printf("\n\n");
-  //close(fileFd);
   close(fileFd2);
   //printf("After file writing\n");
 
@@ -160,10 +167,8 @@ void handlePut(int connfd)
   close(connfd);
 }
 
-
 void handleGet(int connfd)
 {
-  //pthread_mutex_lock(&lock2);
 
   int bytesRead;
   int bytesSent;
@@ -220,8 +225,7 @@ void handleGet(int connfd)
 
    printf("Directory path %s\n", directoryPath);
    
-    //d = opendir("./DFS4/Alice");
-    d = opendir(directoryPath);
+  d = opendir(directoryPath);
   
   if(d)
   {
@@ -246,9 +250,12 @@ void handleGet(int connfd)
     }
     else if(ENOENT == errno)
     {
-      printf("ERROR: Directory %s\n doesn't exist\n", directoryPath);
+      printf("ERROR: Directory %s doesn't exist\n", directoryPath);
     }
-
+    else
+    {
+      printf("ERROR: Opening the directory %s", directoryPath);
+    }
 
     char *foundFilesStr;
     sprintf(foundFilesStr, "%d", foundFiles);
@@ -312,45 +319,81 @@ void handleGet(int connfd)
       printf("Got message %s\n", message);    
     }
 
-        /*
-
-          bzero(message, NAME);
-          strcpy(message, "Found");
-
-          bzero(filePath, NAME);
-          strcpy(filePath, directoryPath);
-          strcat(filePath, "/");
-          strcat(filePath, dir->d_name);
-
-          if((bytesSent = send(connfd, message, strlen(message), 0))<0)
-          {
-            printf("ERROR: Error sending found message to client\n");
-          }
-
-          fileFd = open(filePath, O_RDONLY);
-
-          if(fileFd != -1)
-          {
-            while((bytesRead = read(fileFd, readBuffer, READ_BUFFER)) >0)
-            {
-              //send
-            }
-          }
-          else
-          {
-            printf("ERROR: Opening the file %s. File found but cannot open it.\n", filePath);
-          }
-          */
-
-
-  //pthread_mutex_unlock(&lock2);
   close(connfd); 
 }
 
-void handleList()
+void handleList(int connfd)
 {
+  int bytesSent;
+  int bytesRead;
+  char *messageRecvd = malloc(READ_BUFFER);
+  char *messageSent = malloc(READ_BUFFER);
+  char *directoryPath = malloc(READ_BUFFER);
+  char *directoryRecv = malloc(READ_BUFFER);
+
   printf("Server: Handling LIST command ...\n");
 
+  if((bytesRead = recv(connfd, messageRecvd, READ_BUFFER, 0))<0)
+  {
+    printf("ERROR: Receiving message for LIST command\n");
+    close(connfd);
+    return;
+  }
+
+  strncpy(directoryRecv, messageRecvd, bytesRead);
+
+  DIR *d;
+  struct dirent *dir;
+  strcpy(directoryPath, ".");
+  strcat(directoryPath, "/");
+  strcat(directoryPath, rootFolder);
+  strcat(directoryPath, "/");
+  strcat(directoryPath, clientUsername);
+
+  if(strncmp(directoryRecv, "NULL", 4) != 0)
+  {
+    strcat(directoryPath,"/");
+    strcat(directoryPath, messageRecvd);
+  }
+
+  bzero(messageSent, READ_BUFFER);
+  strcpy(messageSent, rootFolder);
+  strcat(messageSent, "&");
+  //search directory and then send all those values to the client
+  d = opendir(directoryPath);
+  
+  if(d)
+  {
+      while((dir = readdir(d)) != NULL)
+      {
+
+        if(dir->d_type != DT_DIR)
+        {
+          //printf("%s is dir\n", dir->d_name);
+          strcat(messageSent,dir->d_name);
+          strcat(messageSent, "&");
+        }          
+      }
+
+      closedir(d);
+  } 
+  else if(ENOENT == errno)
+  {
+      printf("ERROR: Directory %s doesn't exist\n", directoryPath);
+  }
+  else
+  {
+    printf("ERROR: Opening the directory %s\n", directoryPath);
+  }
+
+  if((bytesSent = send(connfd, messageSent, strlen(messageSent),0))<0)
+  {
+    printf("ERROR: Sending the list of directories for LIST\n");
+    close(connfd);
+    return;
+  }
+
+  close(connfd);
 }
 
 void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
@@ -378,21 +421,23 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
     //printf("Inside loop: username %s, password %s\n", userNames[i], password[i]);
       if(strcmp(clientUsername, userNames[i]) == 0 && strcmp(clientPassword, password[i]) == 0)
       {
-        printf("MSG: Found\n");
+        printf("MSG: User %s, authenticated.\n", userNames[i]);
         strcpy(message, "valid");
+        //printf("Inside Valid Crap\n");
+        break;
       }
       else
       {
-        strcpy(message, "Invalid Username/Password. Please try again.\n");
+        //printf("Inside Invalid Crap\n");
+        strcpy(message, "Invalid Username/Password. Please try agains.\n");
       }
+
+  }
 
       bytesSent = send(connfd, message, strlen(message), 0);
 
       if(bytesSent < 0)
         printf("ERROR: Sending valid user message\n");
-
-  }
-
   //printf("MSG: Not found\n");
 }
 
@@ -407,8 +452,9 @@ void runServer()
 
   //Create a socket for the soclet
   //If sockfd<0 there was an error in the creation of the socket
-  if ((listenfd = socket (AF_INET, SOCK_STREAM, 0)) <0) {
-    perror("ERROR: Problem in creating the socket\n");
+  if ((listenfd = socket (AF_INET, SOCK_STREAM, 0)) <0)
+  {
+    printf("ERROR: Problem in creating the socket.\n");
     exit(EXIT_FAILURE);
   }
   else
@@ -425,13 +471,13 @@ void runServer()
   int reuse = 1;
   if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse,sizeof(reuse)) == -1)
     {
-      perror("ERROR: Setsockopt failed\n");
+      perror("ERROR: Setsockopt failed.\n");
     }
   
   //bind the socket
   if(bind (listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0)
     {
-      perror("ERROR: error binding the socket\n");
+      perror("ERROR: error binding the socket.\n");
       exit(EXIT_FAILURE);
     }
   else
@@ -483,18 +529,20 @@ void runServer()
         }
         else if(strncmp(buf, "LIST", 4) == 0)
         {
-          handleList();
+          handleList(connfd);
         }
         else
         {
           printf("ERROR: Message not recognized, %s!. Msg: %s.\n", clientUsername, buf);
         }
 
-        n = send(connfd, buf, strlen(buf), 0);
+        /*n = send(connfd, buf, strlen(buf), 0);
 
         if(n < 0)
           printf("ERROR: Sending message\n");
-
+        else
+          printf("MSG: Sent mesg: %s\n", buf);
+        */
         bzero(buf, READ_BUFFER);
       }
 

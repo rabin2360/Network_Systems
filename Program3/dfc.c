@@ -35,6 +35,20 @@ bool recvCompleteFile;
 char *username;
 char *password;
 
+//char files[SERVERS][FILENAME];
+char dfs1Files[FILENAME][FILENAME];
+char dfs2Files[FILENAME][FILENAME];
+char dfs3Files[FILENAME][FILENAME];
+char dfs4Files[FILENAME][FILENAME];
+char listCompFiles[FILENAME][FILENAME];
+char listIncompFiles[FILENAME][FILENAME];
+int dfs1Size;
+int dfs2Size;
+int dfs3Size;
+int dfs4Size;
+int listCompFilesSize;
+int listIncompFilesSize;
+
 char commands[3][FILENAME];
 int commandsNum;
 int fileHashVal;
@@ -213,7 +227,6 @@ void splitFile(char * filename)
 
   int smallerFileSize = lseek(fd, 0, SEEK_END);
   smallerFileSize = smallerFileSize/FILES;
-
   lseek(fd,0, SEEK_SET);
 
   long cumulativeSize = 0;
@@ -221,6 +234,9 @@ void splitFile(char * filename)
   int smallerFileFd;
   int currentFileNum = 0;
   char smallFileName[FILENAME];
+
+  strcpy(filename, filename+2);
+  //strcpy(filename, filename++)
   sprintf(smallFileName, "%s.%d", filename, currentFileNum+1);
   //sprintf(smallFileName, "%d",currentFileNum);
   //printf("%s\n", smallFileName);
@@ -286,13 +302,15 @@ void processPUT(int sock, char * message, char * destinationFolder)
   if(fileFd == -1)
     {
       printf("ERROR: PUT cannot open the file %s\n", message);
+      close(sock);
       return;
     }
 
   //sending the file chunk name
   if(send(sock, message, strlen(message), 0)<0)
     {
-      printf("ERROR: PUT cannot send filename.\n");
+      printf("ERROR: PUT cannot send filename %s.\n", message);
+      close(sock);
       return;
     }
 
@@ -306,7 +324,9 @@ void processPUT(int sock, char * message, char * destinationFolder)
       printf("ERROR: PUT recv failed for acknowledging filename.\n");
     else
       printf("ERROR: PUT recv timeout.\n");
-           
+       
+    close(sock);
+    return;    
   }
   //printf("%s\n", message);
 
@@ -333,6 +353,7 @@ void processPUT(int sock, char * message, char * destinationFolder)
   if(send(sock, message, strlen(message), 0)<0)
   {
     printf("ERROR: PUT cannot send the folder name.\n");
+    close(sock);
     return;
   }
 
@@ -344,14 +365,6 @@ void processPUT(int sock, char * message, char * destinationFolder)
   cumReadSize = 0;
   int sentData = 0;
   int cumSent = 0;
-
-  //char *testFileContent = malloc(cumReadSize);
-  //bytesRead = read(fileFd, testFileContent, cumReadSize);
-  //if((sentData = send(sock, testFileContent, bytesRead, 0)<0))
-  //{
-  //  printf("ERROR: PUT sending data\n");
-  //}
-
 
   while((bytesRead = read(fileFd, fileContent, READ_BUFFER)) > 0){
     cumReadSize += bytesRead;
@@ -496,7 +509,7 @@ void processGET(int sock, char *filename, char *destinationFolder)
     strcat(recvFileChunkName, readBuffer);
 
     //get the chunk #
-    printf("Chunk # %c\n", recvFileChunkName[strlen(recvFileChunkName)-1]);
+    //printf("Chunk # %c\n", recvFileChunkName[strlen(recvFileChunkName)-1]);
     int arrayIndex = recvFileChunkName[strlen(recvFileChunkName)-1] - '0';
     arrayIndex--;
 
@@ -533,35 +546,79 @@ void processGET(int sock, char *filename, char *destinationFolder)
     }
   }
 
-/*
-  for(int i = 0; i<numberOfFilesFound; i++)
-  {
-    printf("Stored file names %s\n", recevFileChunks[i]);
-  }
-*/
-
-
-
-  //<IDEA>get the files
-
-  //contact each server and get the file -ignore first character
-  //match the middle substring
-
-  //recv the file chunks. if all required chunks received,
-  //then go ahead and call for combine
-
-  //call for combine
-
-  //do md5 check
-
 }
 
-char* processLIST(char * path)
+void processLIST(int sock, char * destinationFolder)
 {
+  int bytesRead;
+  int bytesSent;
+  char * messageRecvd = malloc(READ_BUFFER);
+  char * messageSent = malloc(READ_BUFFER);
 
-  char * listCommand = malloc(READ_BUFFER);
+  char *folderToSearch = malloc(FILENAME);
+  strcpy(folderToSearch, "NULL");
 
-  return listCommand;
+  if(strncmp(destinationFolder, "NULL", 3)  != 0)
+  {
+    printf("Destination folder %s\n", destinationFolder);
+    strcpy(folderToSearch, destinationFolder);
+  }
+
+  //sending the folder to search
+  if((bytesSent = send(sock, folderToSearch, strlen(folderToSearch), 0))<0)
+  {
+    printf("ERROR: Sending the folder to search for LIST command\n");
+    close(sock);
+    return;
+  }
+
+  bzero(messageRecvd, READ_BUFFER);
+
+  if((bytesRead = read(sock, messageRecvd, READ_BUFFER))<0)
+  {
+    printf("ERROR: Receiving the file list for LIST command\n");
+    close(sock);
+    return;
+  }
+
+  char *tokens = strtok(messageRecvd, "&\n");
+  int listIndex = tokens[(strlen(tokens)-1)]-'0';
+  //printf("token %s, arrayIndex %d, char: %c\n", tokens, listIndex, tokens[strlen(tokens-1)]);
+  tokens = strtok(NULL, "&\n");
+
+  int elementIndex = 0;
+
+  while(tokens != NULL)
+  {
+    tokens++;
+      //printf("tokens: %s\n", tokens);
+
+      if(listIndex == 1)
+      {
+        strcpy(dfs1Files[dfs1Size], tokens);
+        dfs1Size++;
+      }
+      else if(listIndex == 2)
+      {
+        strcpy(dfs2Files[dfs2Size], tokens);
+        dfs2Size++;
+      }
+      else if(listIndex == 3)
+      {
+        strcpy(dfs3Files[dfs3Size],tokens);
+        dfs3Size++;
+      }
+      else if(listIndex == 4)
+      {
+        strcpy(dfs4Files[dfs4Size], tokens);
+        dfs4Size++;
+      }
+
+    tokens = strtok(NULL, "&\n");
+  }
+  //printf("LIST:\n%s\n\n", messageRecvd);
+
+  close(sock);
 }
 
 bool validateUser(int sock)
@@ -569,13 +626,17 @@ bool validateUser(int sock)
   char * usernameAndPassword = malloc(FILENAME);
   char * server_reply = malloc(FILENAME);
 
+  bzero(usernameAndPassword, FILENAME);
   strcpy(usernameAndPassword, "valid&");
   strcat(usernameAndPassword, username);
   strcat(usernameAndPassword, "&");
   strcat(usernameAndPassword, password);
 
+  bzero(server_reply, FILENAME);
+
   if( send(sock, usernameAndPassword, strlen(usernameAndPassword), 0) < 0)
     {
+      printf("ERROR: Sending username and password\n");
       return false;
     }
   else
@@ -597,10 +658,10 @@ bool validateUser(int sock)
 	           //printf("%s\n", server_reply);
 	           return true;
 	         }
-	         /*
+	         
 	         else
-	         printf("%s\n", server_reply);
-	         */	
+	           printf("Server %s\n", server_reply);
+	         
         }
     }
 
@@ -626,6 +687,191 @@ void resetCompleteness()
     //remove(recevFileChunks[i]);
     recvFileCompleteness[i] = 0;
   }
+}
+
+int returnChunkNum(char * string)
+{
+  int chunkNum = string[strlen(string)-1] - '0';
+  chunkNum--;
+
+  return chunkNum;
+}
+
+bool checkIncompleteFileList(char * input)
+{
+  char *element = malloc(FILENAME);
+  strcpy(element, input);
+  element[strlen(element)-1] = 0;
+  element[strlen(element)-1] = 0;
+  
+  for(int i =0; i<listIncompFilesSize; i++)
+  {
+    if(strcmp(listIncompFiles[i], element) == 0){
+      //printf("ENTERING INC: %s, %s\n", listIncompFiles[i], element);
+      return true;
+    }
+  }
+
+  return false;
+
+}
+
+bool checkCompleteFileList(char *input)
+{
+  char *element = malloc(FILENAME);
+  strcpy(element, input);
+  element[strlen(element)-1] = 0;
+  element[strlen(element)-1] = 0;
+
+  for(int i =0; i<listCompFilesSize; i++)
+  {
+    if(strcmp(listCompFiles[i], element) == 0){
+      //printf("ENTERING COMP: %s, %s\n", listCompFiles[i], element);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void findElement(char * input)
+{
+
+  if(checkCompleteFileList(input))
+    return;
+
+  if(checkIncompleteFileList(input))
+    return;
+
+  //printf("Passes first checks\n");
+
+  char *firstElement = malloc(FILENAME);
+  char *secondElement = malloc(FILENAME);
+
+  strcpy(firstElement, input);
+
+  //printf("Element: %s\n\n ", element);
+  recvFileCompleteness[returnChunkNum(firstElement)] = 1;
+  firstElement[strlen(firstElement)-1] = 0;
+  //printf("Stripped element %s\n", firstElement);
+
+  //check in list1
+  for(int i = 0; i<dfs1Size; i++)
+  {
+    
+    strcpy(secondElement, dfs1Files[i]);
+    int index = returnChunkNum(secondElement);
+    secondElement[strlen(secondElement)-1] = 0;
+
+    //printf("First Element %s, Second Element %s\n", firstElement, secondElement);
+
+    if(strcmp(firstElement, secondElement) == 0)
+    {
+      recvFileCompleteness[index] = 1;
+    }
+  }
+
+  /*printf("List 1 %s\n", input);
+  for(int i = 0; i<4; i++)
+  {
+    printf("%d ", recvFileCompleteness[i]);
+  }
+
+  printf("\n");
+*/
+  //check if all the chunk found
+  if(checkCompleteness())
+    return;
+
+    //check in list2
+  for(int i = 0; i<dfs2Size; i++)
+  {
+    
+    strcpy(secondElement, dfs2Files[i]);
+    int index = returnChunkNum(secondElement);
+    secondElement[strlen(secondElement)-1] = 0;
+
+    //printf("First Element %s, Second Element %s\n", firstElement, secondElement);
+
+    if(strcmp(firstElement, secondElement) == 0)
+    {
+      recvFileCompleteness[index] = 1;
+    }
+  }
+
+  /*printf("List 2 %s\n", input);
+  for(int i = 0; i<4; i++)
+  {
+    printf("%d ", recvFileCompleteness[i]);
+  }
+
+  printf("\n");
+*/
+
+  //check if all the chunk found
+  if(checkCompleteness())
+    return;
+
+    //check in list3
+  for(int i = 0; i<dfs3Size; i++)
+  {
+    
+    strcpy(secondElement, dfs3Files[i]);
+    int index = returnChunkNum(secondElement);
+    secondElement[strlen(secondElement)-1] = 0;
+
+    //printf("First Element %s, Second Element %s\n", firstElement, secondElement);
+
+    if(strcmp(firstElement, secondElement) == 0)
+    {
+      //printf("My index %d %s\n", index, secondElement);
+      recvFileCompleteness[index] = 1;
+    }
+  }
+
+  /*printf("List 3 %s\n", input);
+  for(int i = 0; i<4; i++)
+  {
+    printf("%d ", recvFileCompleteness[i]);
+  }
+
+  printf("\n");
+*/
+
+  //check if all the chunk found
+  if(checkCompleteness())
+    return;
+
+      //check in list4
+  for(int i = 0; i<dfs4Size; i++)
+  {
+    
+    strcpy(secondElement, dfs4Files[i]);
+    int index = returnChunkNum(secondElement);
+    secondElement[strlen(secondElement)-1] = 0;
+
+    //printf("First Element %s, Second Element %s\n", firstElement, dfs4Files[i]);
+
+    if(strcmp(firstElement, secondElement) == 0)
+    {
+      recvFileCompleteness[index] = 1;
+    }
+  }
+
+  /*printf("List 4 %s\n", input);
+  for(int i = 0; i<4; i++)
+  {
+    printf("%d ", recvFileCompleteness[i]);
+  }
+
+  printf("\n");
+*/
+
+
+  //check if all the chunk found
+  if(checkCompleteness())
+    return;
+
 }
 
 void connectToServer(char * serverIP, char* portNum, char * messageTag, char * message, char * destinationFolder)
@@ -717,8 +963,6 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
   arg = fcntl(sock, F_GETFL, NULL);
   arg &=(~O_NONBLOCK);
   fcntl(sock, F_SETFL, arg);
-    
-
 
   loopControl = validateUser(sock);
 
@@ -757,6 +1001,63 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
       printf("Recv index %d, val: %d\n", i, recvFileCompleteness[i]);
     }
   }
+  else if(strncmp(messageTag, "LIST", 4) == 0)
+  {
+    //*destinationFolder = '\0';
+    processLIST(sock, destinationFolder);
+  }
+}
+
+void checkList(int size, char array[FILENAME][FILENAME])
+{
+  /*for(int i = 0; i<size; i++)
+  {
+    printf("%s  ", array[i]);
+  }
+
+  printf("\n\n");
+  */
+
+  if(size > 0)
+       {
+          for(int i = 0; i<size; i++)
+          {
+            //printf("Inside the loop of list\n");
+            resetCompleteness();
+            findElement(array[i]);
+
+            if(checkCompleteFileList(array[i]))
+            {
+              continue;
+            }
+            else if(checkIncompleteFileList(array[i]))
+            {
+              continue;
+            }
+            else if(checkCompleteness() && !checkCompleteFileList(array[i]))
+            {
+              char * tempString = malloc(FILENAME);
+              strcpy(tempString, array[i]);
+              tempString[strlen(tempString)-1] = 0;
+              tempString[strlen(tempString)-1] = 0;
+              strcpy(listCompFiles[listCompFilesSize], tempString);
+              listCompFilesSize++;
+              printf("%s\n",tempString);
+
+            }
+            else if(!checkCompleteness() && !checkIncompleteFileList(array[i]))
+            {
+              char * tempString = malloc(FILENAME);
+              strcpy(tempString, array[i]);
+              tempString[strlen(tempString)-1] = 0;
+              tempString[strlen(tempString)-1] = 0;
+              strcpy(listIncompFiles[listIncompFilesSize], tempString);
+              listIncompFilesSize++;
+              
+              printf("%s[incomplete]\n", tempString);
+            }
+          }
+        }
 }
 
 void runClient()
@@ -784,7 +1085,8 @@ void runClient()
 
   //split the file
 
-  while(1){
+  while(1)
+  {
 
     printf("Enter message : ");
 
@@ -797,6 +1099,14 @@ void runClient()
     *destinationFolder = '\0';
     send = true;
     commandsNum = 0;
+
+
+    dfs1Size = 0;
+    dfs2Size = 0;
+    dfs3Size = 0;
+    dfs4Size = 0;
+    listCompFilesSize = 0;
+    listIncompFilesSize = 0;
 
     fgets(readBuffer, READ_BUFFER, stdin);
     
@@ -812,7 +1122,7 @@ void runClient()
 
     strcpy(messageTag, commands[0]);
 
-    if(strncmp(readBuffer, "PUT", 3) == 0)
+    if(strncmp(readBuffer, "PUT", 3) == 0 && commandsNum != 1)
     {
 
     strcpy(message, commands[1]);
@@ -821,6 +1131,11 @@ void runClient()
     if(commandsNum == 3)
       strcpy(destinationFolder, commands[2]);
   
+    encryptDecriptFile(message, password);
+
+    char *encryptedFile = malloc(READ_BUFFER);
+    strcpy(encryptedFile, "e_");
+    strcat(encryptedFile, message);
 
       //tokens = strtok(NULL, " \n");
       
@@ -834,7 +1149,7 @@ void runClient()
 
 	encryptDecriptFile(testingEncrypt, password);
 */
-	splitFile(message);
+	splitFile(encryptedFile);
 	fileHashVal = getMd5Hash(message);
 
 
@@ -846,7 +1161,7 @@ void runClient()
     */
 
       }
-    else if(strncmp(readBuffer, "GET", 3) == 0)
+    else if(strncmp(readBuffer, "GET", 3) == 0 && commandsNum != 1)
       {
           //getting the file name
           strcpy(message, commands[1]);
@@ -859,6 +1174,16 @@ void runClient()
     else if(strncmp(readBuffer, "LIST", 4) == 0)
       {
 	       strcpy(messageTag, "LIST");
+         *message = '\0';
+
+         if(commandsNum == 2)
+         {
+          strcpy(destinationFolder, commands[1]);
+         }
+         else
+         {
+           strcpy(destinationFolder, "NULL");
+         }
       }
     else
       {
@@ -898,12 +1223,18 @@ void runClient()
     
     }
 
-    if(strncmp(readBuffer, "GET",3) == 0){
+    if(strncmp(readBuffer, "GET",3) == 0 && send){
       if(checkCompleteness()){
         if(strncmp(readBuffer, "GET", 3) == 0)
         {
           printf("Combine files %s and check md5 sum\n", message);
           combineFiles(message);
+
+          char * encryptedRecv = malloc(FILENAME);
+          strcat(encryptedRecv, "com_");
+          strcat(encryptedRecv, message);
+
+          encryptDecriptFile(encryptedRecv, password);
         }
       }
       else
@@ -911,7 +1242,7 @@ void runClient()
         printf("MSG: File %s is not complete\n", message);
       }
     }
-    else if(strncmp(readBuffer, "PUT",3) == 0)
+    else if(strncmp(readBuffer, "PUT",3) == 0 && send)
     {
       for(int i = 0; i<SERVERS; i++)
       {
@@ -921,6 +1252,23 @@ void runClient()
           printf("ERROR: Removing %s\n", fileChunkNames[i]);
         }
       }
+    }
+    else if(strncmp(readBuffer, "LIST", 4) == 0 && send)
+    {
+      //checking for files list in each server directory
+      checkList(dfs1Size, dfs1Files);
+      checkList(dfs2Size, dfs2Files);
+      checkList(dfs3Size, dfs3Files);
+      checkList(dfs4Size, dfs4Files);
+
+      if(listIncompFilesSize  == 0 && listCompFilesSize == 0)
+      {
+        printf("MSG: The server folders are empty.\n");
+      }
+    }
+    else
+    {
+      printf("HMmmmm... %s\n", readBuffer);
     }
 
   }
@@ -1006,6 +1354,7 @@ int main(int argc, char **argv)
 	
   parseConfigFile(argv[1]);
   resetCompleteness();
+
   //splitFile("wine3.jpg");	
   //splitFile("foo1");
 
