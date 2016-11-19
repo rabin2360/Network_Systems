@@ -71,7 +71,7 @@ int encryptDecriptFile(char * filename, char * key)
   fd = open(filename, O_RDONLY);
 
   if(fd == -1)
-    return -1;
+      return -1;
 
   fileContent = malloc(READ_BUFFER);
 
@@ -221,11 +221,11 @@ int getMd5Hash(char *filename)
       if(isalpha(calculatedMd5[i]))
       {
         charVal -= 39;
-        printf("char: %c, a-val: %d\n", calculatedMd5[i], charVal);
+        //printf("char: %c, a-val: %d\n", calculatedMd5[i], charVal);
       }
       else if(isdigit(calculatedMd5[i]))
       {
-        printf("char: %c, d-val: %d\n", calculatedMd5[i], charVal);
+        //printf("char: %c, d-val: %d\n", calculatedMd5[i], charVal);
       }
 
       result = result*16 + (charVal);
@@ -247,8 +247,7 @@ int splitFile(char * filename)
   char * confFileContent = malloc(READ_BUFFER);
 
   int fd = open(filename, O_RDONLY);
-
-  int smallerFileSize = lseek(fd, 0, SEEK_END);
+  long smallerFileSize = lseek(fd, 0, SEEK_END);
   smallerFileSize = smallerFileSize/FILES;
   lseek(fd,0, SEEK_SET);
 
@@ -262,12 +261,14 @@ int splitFile(char * filename)
   //strcpy(filename, filename++)
   sprintf(smallFileName, "%s.%d", filename, currentFileNum+1);
   //sprintf(smallFileName, "%d",currentFileNum);
-  //printf("%s\n", smallFileName);
+  printf("%s\n", smallFileName);
 
   if(fd != -1)
     {
 
       strcpy(fileChunkNames[currentFileNum],smallFileName);
+      printf("TESTING INSIDE %s\n", fileChunkNames[currentFileNum]);
+
       smallerFileFd = open(smallFileName, O_RDWR | O_CREAT, 0777);
 
       if(smallerFileFd == -1)
@@ -289,9 +290,10 @@ int splitFile(char * filename)
 	      currentFileNum++;
 
 	      sprintf(smallFileName, "%s.%d",filename, currentFileNum+1);
-	      //printf("%s\n", smallFileName);
-	      strcpy(fileChunkNames[currentFileNum],smallFileName);
-		
+	      printf("%s\n", smallFileName);
+
+        strcpy(fileChunkNames[currentFileNum],smallFileName);
+    
 	      smallerFileFd = open(smallFileName, O_RDWR | O_CREAT, 0777);
 
 	      if(smallerFileFd == -1)
@@ -312,6 +314,8 @@ int splitFile(char * filename)
       printf("ERROR: Opening the file %s\n", filename);
       return -1;
     }
+
+    printf("TESTING %s\n",fileChunkNames[2]);
 
     return 1;
 }
@@ -533,7 +537,7 @@ void processGET(int sock, char *filename, char *destinationFolder)
     }
 
     char *recvFileChunkName = malloc(FILENAME);
-    strcpy(recvFileChunkName, "r_chunk_");
+    strcpy(recvFileChunkName, "._chunk_");
     strcat(recvFileChunkName, readBuffer);
 
     //get the chunk #
