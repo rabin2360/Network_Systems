@@ -54,7 +54,7 @@ int commandsNum;
 int fileHashVal;
 
 //bit XOR encryption
-void encryptDecriptFile(char * filename, char * key)
+int encryptDecriptFile(char * filename, char * key)
 {
   char *outputFileName = malloc(FILENAME);
   strcpy(outputFileName, "e_");
@@ -66,6 +66,10 @@ void encryptDecriptFile(char * filename, char * key)
   int fd, outputFd;
 
   fd = open(filename, O_RDONLY);
+
+  if(fd == -1)
+    return -1;
+
   fileContent = malloc(READ_BUFFER);
 
   char * outputFileContent = malloc(READ_BUFFER);
@@ -86,6 +90,7 @@ void encryptDecriptFile(char * filename, char * key)
 
   close(fd);
   close(outputFd);
+  return 1;
 }
 
 void checkIntegrity(char *file1, char *file2)
@@ -217,7 +222,7 @@ int getMd5Hash(char *filename)
 
 //split the input file into 4 chunks
 //split the file in x-chunks
-void splitFile(char * filename)
+int splitFile(char * filename)
 {
 
   int bytesRead;
@@ -287,7 +292,10 @@ void splitFile(char * filename)
   else
     {
       printf("ERROR: Opening the file %s\n", filename);
+      return -1;
     }
+
+    return 1;
 }
 
 void processPUT(int sock, char * message, char * destinationFolder)
@@ -352,10 +360,12 @@ void processPUT(int sock, char * message, char * destinationFolder)
 
   if(send(sock, message, strlen(message), 0)<0)
   {
-    printf("ERROR: PUT cannot send the folder name.\n");
+    printf("ERROR: PUT cannot send the destination folder name.\n");
     close(sock);
     return;
   }
+
+  printf("DESTINATION FOLDER %s\n", message);
 
   //resetting the filecontent buffer and the send message buffer
   bzero(fileContent, READ_BUFFER);
@@ -591,7 +601,7 @@ void processLIST(int sock, char * destinationFolder)
   while(tokens != NULL)
   {
     tokens++;
-      //printf("tokens: %s\n", tokens);
+      //printf("TOKENS: %s\n", tokens);
 
       if(listIndex == 1)
       {
@@ -1129,9 +1139,16 @@ void runClient()
 
      
     if(commandsNum == 3)
+    {
       strcpy(destinationFolder, commands[2]);
-  
-    encryptDecriptFile(message, password);
+      //printf("destination folder %s\n", destinationFolder);
+    }
+
+    if(encryptDecriptFile(message, password) == -1)
+    {
+      printf("ERROR: File %s not found. Please check your local directory.\n", message);
+      continue;
+    }
 
     char *encryptedFile = malloc(READ_BUFFER);
     strcpy(encryptedFile, "e_");
@@ -1149,7 +1166,11 @@ void runClient()
 
 	encryptDecriptFile(testingEncrypt, password);
 */
-	splitFile(encryptedFile);
+	if(splitFile(encryptedFile) == -1)
+  {
+      continue;
+  }
+
 	fileHashVal = getMd5Hash(message);
 
 
@@ -1263,7 +1284,7 @@ void runClient()
 
       if(listIncompFilesSize  == 0 && listCompFilesSize == 0)
       {
-        printf("MSG: The server folders are empty.\n");
+        printf("\nMSG: The server folders are either empty or the directory doesn't exist.\n");
       }
     }
     else

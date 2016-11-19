@@ -86,7 +86,7 @@ void handlePut(int connfd)
   }
 
   //receiving folder
-  if((bytesRead = recv(connfd, buf, READ_BUFFER,0)<0))
+  if((bytesRead = recv(connfd, buf, READ_BUFFER,0))<0)
   {
     printf("ERROR: Did not receive the folder to put the file.\n");
     close(connfd);
@@ -103,7 +103,7 @@ void handlePut(int connfd)
   //int fileSizeBuffer = atoi(buf);
   if(strncmp(folderName, "null", 3) != 0)
   {
-    //printf("Inside: %s\n", folderName);
+    printf("Inside: %s %d\n", buf, bytesRead);
     char * tempDirectory = malloc(READ_BUFFER);
     strcpy(tempDirectory, fileLocation);
     strcat(tempDirectory, "/");
@@ -112,7 +112,7 @@ void handlePut(int connfd)
     createDirectory(tempDirectory);
 
     //create a path name to open a file there
-    //printf("%s\n", tempDirectory);
+    printf("%s\n", tempDirectory);
     //strcpy(fileLocation, "./");
 
     strcpy(fileLocation, tempDirectory);
