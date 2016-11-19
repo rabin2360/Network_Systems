@@ -103,7 +103,7 @@ void handlePut(int connfd)
   //int fileSizeBuffer = atoi(buf);
   if(strncmp(folderName, "null", 3) != 0)
   {
-    printf("Inside: %s %d\n", buf, bytesRead);
+    //printf("Inside: %s %d\n", buf, bytesRead);
     char * tempDirectory = malloc(READ_BUFFER);
     strcpy(tempDirectory, fileLocation);
     strcat(tempDirectory, "/");
@@ -116,12 +116,12 @@ void handlePut(int connfd)
     //strcpy(fileLocation, "./");
 
     strcpy(fileLocation, tempDirectory);
-    strcat(fileLocation, "/r");
+    strcat(fileLocation, "/.");
   }
   else
   {
       //strcpy(fileLocation, "./");
-    strcat(fileLocation, "/r");
+    strcat(fileLocation, "/.");
   }
 
   strcat(fileLocation, filename);

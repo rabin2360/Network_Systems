@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <openssl/md5.h>
+#include <ctype.h>
 
 #define READ_BUFFER 1024
 #define MAXBUFSIZE 1024
@@ -48,6 +49,8 @@ int dfs3Size;
 int dfs4Size;
 int listCompFilesSize;
 int listIncompFilesSize;
+
+int sendOrder[FILES];
 
 char commands[3][FILENAME];
 int commandsNum;
@@ -161,9 +164,9 @@ char *str2md5(const char * str, int length)
   while(length > 0)
     {
       if(length > 512)
-	MD5_Update(&c, str, 512);
+	     MD5_Update(&c, str, 512);
       else
-	MD5_Update(&c, str, length);
+	     MD5_Update(&c, str, length);
 
       length -=512;
       str += 512;
@@ -202,19 +205,34 @@ int getMd5Hash(char *filename)
 	
   //calculate md5
   char * calculatedMd5 = str2md5(fileContent, cumulativeBytesRead/sizeof(char));
-  //printf("Md5 Hash %s\n", calculatedMd5);
+  printf("Md5 Hash %s\n", calculatedMd5);
 	
-  int result = 0;
+  unsigned long result = 0;
   int length = strlen(calculatedMd5);
 
   //convert the hash string to int
+  //strcpy(calculatedMd5, "bcdef0aa");
+  int charVal = 0;
   for(int i = 0; i<length; i++)
     {
-      result = result*10 + (calculatedMd5[i] - '0');
-      //printf("result: %d\n", result);
+
+      charVal = calculatedMd5[i]- '0';
+      
+      if(isalpha(calculatedMd5[i]))
+      {
+        charVal -= 39;
+        printf("char: %c, a-val: %d\n", calculatedMd5[i], charVal);
+      }
+      else if(isdigit(calculatedMd5[i]))
+      {
+        printf("char: %c, d-val: %d\n", calculatedMd5[i], charVal);
+      }
+
+      result = result*16 + (charVal);
     }
 
-  result = abs(result) % SERVERS;
+  printf("result: %lu\n", result);
+  result = result % SERVERS;
   //printf("result: %d\n", result);
 
   return result;
@@ -983,7 +1001,7 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     return;
   }
   else
-    printf("MSG: Username and password authenticated. %s:%s\n\n", serverIP, portNum);
+    printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
         
   //determine if it is put/get or list
   //Send message tag
@@ -1003,7 +1021,7 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
   }
   else if(strcmp(messageTag, "GET") == 0)
   {
-    printf("Searching for %s in %s:%s\n", message, serverIP, portNum);
+    //printf("Searching for %s in %s:%s\n", message, serverIP, portNum);
     processGET(sock, message, destinationFolder);
 
     for(int i = 0; i<SERVERS; i++)
@@ -1016,6 +1034,8 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     //*destinationFolder = '\0';
     processLIST(sock, destinationFolder);
   }
+
+  printf("\n\n");
 }
 
 void checkList(int size, char array[FILENAME][FILENAME])
@@ -1052,7 +1072,7 @@ void checkList(int size, char array[FILENAME][FILENAME])
               tempString[strlen(tempString)-1] = 0;
               strcpy(listCompFiles[listCompFilesSize], tempString);
               listCompFilesSize++;
-              printf("%s\n",tempString);
+              printf("%s\n\n",tempString);
 
             }
             else if(!checkCompleteness() && !checkIncompleteFileList(array[i]))
@@ -1064,7 +1084,7 @@ void checkList(int size, char array[FILENAME][FILENAME])
               strcpy(listIncompFiles[listIncompFilesSize], tempString);
               listIncompFilesSize++;
               
-              printf("%s[incomplete]\n", tempString);
+              printf("%s[incomplete]\n\n", tempString);
             }
           }
         }
@@ -1206,12 +1226,31 @@ void runClient()
            strcpy(destinationFolder, "NULL");
          }
       }
-    else
+      else if(strncmp(readBuffer, "CALC", 4) == 0)
+      {
+        int val = -1;
+        printf("Enter the calcuated value:");
+        scanf("%d", &val);
+
+        int startIndex = (SERVERS-val)%SERVERS;
+        for(int i = 0; i<SERVERS; i++)
+        {
+          int firstPart = startIndex;
+          int secondPart = (startIndex+1)%SERVERS;
+          printf("first %d, second %d\n", sendOrder[firstPart], sendOrder[secondPart]);
+
+          startIndex++;
+          startIndex = startIndex%SERVERS;
+        }
+      }
+       else
       {
 	       printf("ERROR: Unrecognized message %s\n", readBuffer);
 	       send = false;
       }
 
+    int startIndex = (SERVERS-fileHashVal)%SERVERS;
+    printf("file val %d\n", fileHashVal);  
     //sending the GET message to all the servers 
     for(int i = 0; i<FILES && send; i++)
       {
@@ -1223,15 +1262,21 @@ void runClient()
             bzero(message, READ_BUFFER);
       	    //FIX THIS.... JUST put the value in array and then rotate then by the
       	    //file HashVal
-      	    fileHashVal = 3;
+      	    //fileHashVal = 3;
+       
+            int firstPart = startIndex;
+            int secondPart = (startIndex+1)%SERVERS;
 
-      	    strcpy(message, fileChunkNames[abs(i-fileHashVal)%FILES]);
-      	    printf("File location %d\n", (abs(i-fileHashVal)%FILES));
+      	    strcpy(message, fileChunkNames[firstPart]);
+      	    printf("File %s\n", fileChunkNames[firstPart]);
       	    connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
       				
       	    bzero(message, READ_BUFFER);
-      	    strcpy(message, fileChunkNames[abs(i+1-fileHashVal)%FILES]);
-      	    printf("File location %d\n", (abs(i+1-fileHashVal)%FILES));
+      	    strcpy(message, fileChunkNames[secondPart]);
+      	    printf("File %s\n", fileChunkNames[secondPart]);
+
+            startIndex++;
+            startIndex = (startIndex)%SERVERS;
 
       	  }
       	else if (strncmp(readBuffer, "GET", 3) == 0)
@@ -1375,6 +1420,11 @@ int main(int argc, char **argv)
 	
   parseConfigFile(argv[1]);
   resetCompleteness();
+
+  for(int i = 0; i<SERVERS; i++)
+  {
+    sendOrder[i] = i+1;
+  }
 
   //splitFile("wine3.jpg");	
   //splitFile("foo1");
