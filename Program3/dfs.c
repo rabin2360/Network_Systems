@@ -51,7 +51,7 @@ void createDirectory(char * directoryName)
 
 void handlePut(int connfd)
 {
-  printf("Handling PUT command... \n");
+  printf("\nMSG: Handling PUT command... \n");
 
  //pthread_mutex_lock(&lock);
  //get the file name
@@ -112,7 +112,7 @@ void handlePut(int connfd)
     createDirectory(tempDirectory);
 
     //create a path name to open a file there
-    printf("%s\n", tempDirectory);
+    //printf("%s\n", tempDirectory);
     //strcpy(fileLocation, "./");
 
     strcpy(fileLocation, tempDirectory);
@@ -125,6 +125,7 @@ void handlePut(int connfd)
   }
 
   strcat(fileLocation, filename);
+  printf("MSG: Putting file in location: %s\n", fileLocation);
 
   remove(fileLocation);
   fileFd2 = open(fileLocation, O_RDWR | O_CREAT, 0777);
@@ -163,7 +164,7 @@ void handlePut(int connfd)
 
   //pthread_mutex_unlock(&lock);
 
-  //printf("DONE PUTTING\n");
+  printf("MSG: Finished put at %s.\n\n", rootFolder);
   close(connfd);
 }
 
@@ -185,7 +186,7 @@ void handleGet(int connfd)
   char* foundSubStr = malloc(NAME);
   int foundFiles = 0;
 
-  //printf("Server: Handling GET command ... \n");
+  printf("\nMSG: Handling GET command ... \n");
 
   //get the file name from the client
   if((bytesRead = recv(connfd, readBuffer, READ_BUFFER,0))<0)
@@ -207,7 +208,7 @@ void handleGet(int connfd)
 
     char *folderName = malloc(READ_BUFFER);
     strncpy(folderName, readBuffer, bytesRead);
-    printf("MSG: Destination folder received %s\n", folderName);
+    //printf("MSG: Destination folder received %s\n", folderName);
 
     DIR *d;
     struct dirent *dir;
@@ -223,7 +224,7 @@ void handleGet(int connfd)
       strcat(directoryPath, folderName);
     }
 
-   printf("Directory path %s\n", directoryPath);
+   //printf("Directory path %s\n", directoryPath);
    
   d = opendir(directoryPath);
   
@@ -242,8 +243,10 @@ void handleGet(int connfd)
           //printf("Sub string: %s, true string: %s, path %s\n",foundSubStr, dir->d_name, foundFileChunks[foundFiles]);
           
         }
+        /*
         else
           printf("Not substring %s\n", dir->d_name);
+          */
       }
 
     closedir(d);
@@ -260,7 +263,7 @@ void handleGet(int connfd)
     char *foundFilesStr;
     sprintf(foundFilesStr, "%d", foundFiles);
 
-    printf("Total substrings found %s\n", foundFilesStr);
+    printf("Total substrings found in %s: %s\n", directoryPath, foundFilesStr);
 
     bzero(message, READ_BUFFER);
     strcpy(message, foundFilesStr);
@@ -275,7 +278,7 @@ void handleGet(int connfd)
     {
       bzero(message, READ_BUFFER);
       strcpy(message, foundFileChunks[i]);
-      printf("Message sent %s\n", foundFileChunks[i]);
+      //printf("Message sent %s\n", foundFileChunks[i]);
 
       if((bytesSent = send(connfd, foundFileChunks[i], strlen(foundFileChunks[i]), 0))<0)
       {
@@ -288,7 +291,7 @@ void handleGet(int connfd)
         printf("ERROR: Error receiving the file name\n");
       }
 
-      printf("Got message %s\n", message);
+      //printf("Got message %s\n", message);
 
       //add before opening the files
       bzero(filePath, NAME);
@@ -296,7 +299,7 @@ void handleGet(int connfd)
       strcat(filePath, "/");
       strcat(filePath, foundFileChunks[i]);
 
-      printf("Opening %s\n", filePath);
+      //printf("Opening %s\n", filePath);
       
       int chunkFd = open(filePath, O_RDONLY);
 
@@ -316,7 +319,7 @@ void handleGet(int connfd)
         printf("ERROR: No ack for file chunk\n");
       }
 
-      printf("Got message %s\n", message);    
+      //printf("Got message %s\n", message);    
     }
 
   close(connfd); 
@@ -331,7 +334,7 @@ void handleList(int connfd)
   char *directoryPath = malloc(READ_BUFFER);
   char *directoryRecv = malloc(READ_BUFFER);
 
-  printf("Server: Handling LIST command ...\n");
+  printf("\nMSG: Handling LIST command ...\n");
 
   if((bytesRead = recv(connfd, messageRecvd, READ_BUFFER, 0))<0)
   {
@@ -355,6 +358,9 @@ void handleList(int connfd)
     strcat(directoryPath,"/");
     strcat(directoryPath, messageRecvd);
   }
+
+
+  printf("MSG: Sending files of directory: %s\n\n", directoryPath);
 
   bzero(messageSent, READ_BUFFER);
   strcpy(messageSent, rootFolder);
@@ -386,6 +392,8 @@ void handleList(int connfd)
     printf("ERROR: Opening the directory %s\n", directoryPath);
   }
 
+  //printf("Message sent%s\n", messageSent);
+
   if((bytesSent = send(connfd, messageSent, strlen(messageSent),0))<0)
   {
     printf("ERROR: Sending the list of directories for LIST\n");
@@ -394,6 +402,39 @@ void handleList(int connfd)
   }
 
   close(connfd);
+}
+
+void getUserId(char *userId, int bytesLength, int connfd)
+{
+  int bytesSent;
+  clientUsername = malloc(READ_BUFFER);
+  char *message = malloc(READ_BUFFER);
+
+  char *tokens = strtok(userId, "&\n");
+  tokens = strtok(NULL, "&\n");
+  strncpy(clientUsername, tokens, strlen(tokens));
+  //printf("USERNAME: %s\n", clientUsername);
+
+  for(int i = 0; i<usersTotal; i++)
+  {
+    if(strcmp(clientUsername, userNames[i]) == 0)
+    {
+      printf("MSG: User %s, authenticated.\n", userNames[i]);
+      strcpy(message, "OK");
+      break;
+    }
+    else
+    {
+      strcpy(message, "Invalid");
+    } 
+  }
+  
+  bytesSent = send(connfd, message, strlen(message), 0);
+
+  if(bytesSent < 0)
+  {
+    printf("ERROR: Sending the ack to receiving userId.\n");
+  }
 }
 
 void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
@@ -439,6 +480,7 @@ void validateUser(char * usernameAndPassword, int bytesLength, int connfd)
       if(bytesSent < 0)
         printf("ERROR: Sending valid user message\n");
   //printf("MSG: Not found\n");
+      //close(connfd);
 }
 
 void runServer()
@@ -502,7 +544,7 @@ void runServer()
     //accept a connection
 
     connfd = accept (listenfd, (struct sockaddr *) &cliaddr, &clilen);
-    printf("%s\n","MSG: Received request...");
+    printf("\n%s\n","MSG: Received request...");
 
     if ( (childpid = fork ()) == 0 ) {//if it’s 0, it’s child process
 
@@ -518,6 +560,10 @@ void runServer()
         if(strncmp(buf, "valid", 5) == 0)
         {
           validateUser(buf, n, connfd);
+        }
+        else if(strncmp(buf, "user", 4) == 0)
+        {
+          getUserId(buf, n, connfd);
         }
         else if(strncmp(buf, "PUT", 3) == 0)
         {

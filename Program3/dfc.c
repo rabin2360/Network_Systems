@@ -70,6 +70,12 @@ int encryptDecriptFile(char * filename, char * key)
 
   fd = open(filename, O_RDONLY);
 
+  /*printf("Deleting %s\n", filename);
+  if(remove(filename) != 0)
+  {
+    printf("ERROR: Deleting the combined encrypted file.\n");
+  }*/
+
   if(fd == -1)
       return -1;
 
@@ -96,10 +102,6 @@ int encryptDecriptFile(char * filename, char * key)
   return 1;
 }
 
-void checkIntegrity(char *file1, char *file2)
-{
-
-}
 
 //combine files to produce one single file
 void combineFiles(char *filename)
@@ -117,7 +119,7 @@ void combineFiles(char *filename)
 
   if(combinedFileFd != -1)
     {
-      printf("SUCCESS: No error for combined file.\n");
+      printf("MSG: Combined file named e_%s created.\n", combinedFile);
     }
   else
     {
@@ -132,7 +134,7 @@ void combineFiles(char *filename)
   for(int i = 0; i<FILES; i++)
     {
 
-      printf("Filename: %s\n", recevFileChunks[i]);
+      //printf("Filename: %s\n", recevFileChunks[i]);
       chunkFd = open(recevFileChunks[i], O_RDONLY);
 
       while((bytesRead = read(chunkFd, confFileContent, READ_BUFFER))> 0)
@@ -205,7 +207,7 @@ int getMd5Hash(char *filename)
 	
   //calculate md5
   char * calculatedMd5 = str2md5(fileContent, cumulativeBytesRead/sizeof(char));
-  printf("Md5 Hash %s\n", calculatedMd5);
+  //printf("Md5 Hash %s\n", calculatedMd5);
 	
   unsigned long result = 0;
   int length = strlen(calculatedMd5);
@@ -231,7 +233,7 @@ int getMd5Hash(char *filename)
       result = result*16 + (charVal);
     }
 
-  printf("result: %lu\n", result);
+  //printf("result: %lu\n", result);
   result = result % SERVERS;
   //printf("result: %d\n", result);
 
@@ -261,13 +263,12 @@ int splitFile(char * filename)
   //strcpy(filename, filename++)
   sprintf(smallFileName, "%s.%d", filename, currentFileNum+1);
   //sprintf(smallFileName, "%d",currentFileNum);
-  printf("%s\n", smallFileName);
-
+  
   if(fd != -1)
     {
 
       strcpy(fileChunkNames[currentFileNum],smallFileName);
-      printf("TESTING INSIDE %s\n", fileChunkNames[currentFileNum]);
+      //printf("TESTING INSIDE %s\n", fileChunkNames[currentFileNum]);
 
       smallerFileFd = open(smallFileName, O_RDWR | O_CREAT, 0777);
 
@@ -290,9 +291,9 @@ int splitFile(char * filename)
 	      currentFileNum++;
 
 	      sprintf(smallFileName, "%s.%d",filename, currentFileNum+1);
-	      printf("%s\n", smallFileName);
 
-        strcpy(fileChunkNames[currentFileNum],smallFileName);
+        if(currentFileNum<SERVERS)
+          strcpy(fileChunkNames[currentFileNum],smallFileName);
     
 	      smallerFileFd = open(smallFileName, O_RDWR | O_CREAT, 0777);
 
@@ -304,7 +305,6 @@ int splitFile(char * filename)
 			
 	}
 
-      //printf("Outside\n");
       close(smallerFileFd);
 
       close(fd);
@@ -314,8 +314,6 @@ int splitFile(char * filename)
       printf("ERROR: Opening the file %s\n", filename);
       return -1;
     }
-
-    printf("TESTING %s\n",fileChunkNames[2]);
 
     return 1;
 }
@@ -387,7 +385,7 @@ void processPUT(int sock, char * message, char * destinationFolder)
     return;
   }
 
-  printf("DESTINATION FOLDER %s\n", message);
+  //printf("DESTINATION FOLDER %s\n", message);
 
   //resetting the filecontent buffer and the send message buffer
   bzero(fileContent, READ_BUFFER);
@@ -421,8 +419,8 @@ void processPUT(int sock, char * message, char * destinationFolder)
   close(fileFd);
 
   bzero(&(server_reply), sizeof(server_reply));
-  sleep(0.5);
-  printf("Closing\n");
+  sleep(1);
+  //printf("Closing\n");
   close(sock); 
 }
 
@@ -522,7 +520,7 @@ void processGET(int sock, char *filename, char *destinationFolder)
       continue;
     }
 
-    printf("Found file chunk named %s\n", readBuffer);
+    //printf("Found file chunk named %s\n", readBuffer);
     //strcpy(recevFileChunks[i],readBuffer);
 
     bzero(sendBuffer, READ_BUFFER);
@@ -555,16 +553,19 @@ void processGET(int sock, char *filename, char *destinationFolder)
 
     int chunkFd = open(recvFileChunkName, O_RDWR | O_CREAT, 0777);
 
+    if(chunkFd != -1){
     while((bytesRead = recv(sock, readBuffer, READ_BUFFER, 0)) > 0)
     {
       if((write(chunkFd, readBuffer, bytesRead))<0)
       {
         printf("ERROR: Writing to the file chunk %s", recvFileChunkName);
-        continue;
+        //continue;
+        break;
       }
     }
 
     close(chunkFd);
+  }
 
     bzero(sendBuffer, READ_BUFFER);
     strcpy(sendBuffer, "OK");
@@ -606,8 +607,17 @@ void processLIST(int sock, char * destinationFolder)
 
   bzero(messageRecvd, READ_BUFFER);
 
-  if((bytesRead = read(sock, messageRecvd, READ_BUFFER))<0)
+  /*if((bytesRead = read(sock, messageRecvd, READ_BUFFER))<0)
   {
+    printf("message Recvd %s\n", messageRecvd);
+    printf("ERROR: Receiving the file list for LIST command\n");
+    close(sock);
+    return;
+  }*/
+
+      if((bytesRead = recv(sock, messageRecvd, READ_BUFFER, 0))<0)
+  {
+    printf("message Recvd %s\n", messageRecvd);
     printf("ERROR: Receiving the file list for LIST command\n");
     close(sock);
     return;
@@ -651,6 +661,34 @@ void processLIST(int sock, char * destinationFolder)
   //printf("LIST:\n%s\n\n", messageRecvd);
 
   close(sock);
+}
+
+bool sendUserName(int sock)
+{
+  char *userId = malloc(FILENAME);
+  char *reply = malloc(FILENAME);
+
+  strcpy(userId, "user&");
+  strcat(userId, username);
+  strcat(userId, "&");
+
+  if( send(sock, userId, strlen(userId), 0) < 0)
+    {
+      printf("ERROR: Sending username.\n");
+      return false;
+    }
+
+  if(recv(sock, reply, FILENAME, 0) <0)
+  {
+    printf("ERROR: Error acknowledging userId.\n");
+  }
+
+  if(strncmp(reply, "OK", 2) != 0)
+  {
+    return false;
+  }
+
+  return true;
 }
 
 bool validateUser(int sock)
@@ -996,6 +1034,8 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
   arg &=(~O_NONBLOCK);
   fcntl(sock, F_SETFL, arg);
 
+
+if(strcmp(messageTag, "PUT") == 0){
   loopControl = validateUser(sock);
 
   if(!loopControl)
@@ -1006,7 +1046,19 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
   }
   else
     printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
-        
+ }
+ else
+ {
+   if(!sendUserName(sock))
+   {
+    printf("ERROR: Invalid username and/or password. Please check dfc.conf file for %s:%s\n\n", serverIP, portNum);
+    close(sock);
+    return;
+   }
+    else
+    printf("MSG: Username and password authenticated. %s:%s\n", serverIP, portNum);
+ }
+
   //determine if it is put/get or list
   //Send message tag
   if( send(sock , messageTag , strlen(messageTag) , 0) < 0)
@@ -1028,10 +1080,10 @@ void connectToServer(char * serverIP, char* portNum, char * messageTag, char * m
     //printf("Searching for %s in %s:%s\n", message, serverIP, portNum);
     processGET(sock, message, destinationFolder);
 
-    for(int i = 0; i<SERVERS; i++)
+    /*for(int i = 0; i<SERVERS; i++)
     {
       printf("Recv index %d, val: %d\n", i, recvFileCompleteness[i]);
-    }
+    }*/
   }
   else if(strncmp(messageTag, "LIST", 4) == 0)
   {
@@ -1178,32 +1230,21 @@ void runClient()
     strcpy(encryptedFile, "e_");
     strcat(encryptedFile, message);
 
-      //tokens = strtok(NULL, " \n");
-      
-	//encrypt file - complete this later
-  /*
-	encryptDecriptFile(message, password);
+	   if(splitFile(encryptedFile) == -1)
+     {
+        continue;
+     }
 
-	char *testingEncrypt = malloc(READ_BUFFER);
-	strcpy(testingEncrypt, "e_");
-	strcat(testingEncrypt, message);
+     char *deleteFile = malloc(FILENAME);
+     strcpy(deleteFile, "e_");
+     strcat(deleteFile, encryptedFile);
 
-	encryptDecriptFile(testingEncrypt, password);
-*/
-	if(splitFile(encryptedFile) == -1)
-  {
-      continue;
-  }
-
-	fileHashVal = getMd5Hash(message);
-
-
-	/*printf("Total num %d\n", putCommandsNum);
-	for(int i = 0; i<putCommandsNum; i++)
-	  {
-	    printf("%s\n",putCommands[i]);
-	  }
-    */
+  	 fileHashVal = getMd5Hash(message);
+    
+    if (remove(deleteFile) != 0)
+    {
+     printf("ERROR: Removing encrypted file\n");
+    } 
 
       }
     else if(strncmp(readBuffer, "GET", 3) == 0 && commandsNum != 1)
@@ -1254,7 +1295,7 @@ void runClient()
       }
 
     int startIndex = (SERVERS-fileHashVal)%SERVERS;
-    printf("file val %d\n", fileHashVal);  
+    //printf("file val %d\n", fileHashVal);  
     //sending the GET message to all the servers 
     for(int i = 0; i<FILES && send; i++)
       {
@@ -1272,12 +1313,12 @@ void runClient()
             int secondPart = (startIndex+1)%SERVERS;
 
       	    strcpy(message, fileChunkNames[firstPart]);
-      	    printf("File %s\n", fileChunkNames[firstPart]);
+      	    //printf("File %s\n", fileChunkNames[firstPart]);
       	    connectToServer(serverAddrs[i], serverPorts[i], messageTag, message, destinationFolder);
       				
       	    bzero(message, READ_BUFFER);
       	    strcpy(message, fileChunkNames[secondPart]);
-      	    printf("File %s\n", fileChunkNames[secondPart]);
+      	    //printf("File %s\n", fileChunkNames[secondPart]);
 
             startIndex++;
             startIndex = (startIndex)%SERVERS;
@@ -1297,7 +1338,7 @@ void runClient()
       if(checkCompleteness()){
         if(strncmp(readBuffer, "GET", 3) == 0)
         {
-          printf("Combine files %s and check md5 sum\n", message);
+          //printf("Combine files %s and check md5 sum\n", message);
           combineFiles(message);
 
           char * encryptedRecv = malloc(FILENAME);
@@ -1316,12 +1357,14 @@ void runClient()
     {
       for(int i = 0; i<SERVERS; i++)
       {
-        printf("File chunk names %s\n", fileChunkNames[i]);
+        //printf("File chunk names %s\n", fileChunkNames[i]);
         if(remove(fileChunkNames[i]) != 0)
         {
           printf("ERROR: Removing %s\n", fileChunkNames[i]);
         }
       }
+
+      printf("MSG: Successfully put file in the servers.\n");
     }
     else if(strncmp(readBuffer, "LIST", 4) == 0 && send)
     {
@@ -1338,7 +1381,7 @@ void runClient()
     }
     else
     {
-      printf("HMmmmm... %s\n", readBuffer);
+      printf("Command not recognized... %s\n", readBuffer);
     }
 
   }
@@ -1346,7 +1389,7 @@ void runClient()
 }
      
 
-void parseConfigFile(char * filename)
+int parseConfigFile(char * filename)
 {
   int bytesRead, fd;
   char * confFileContent = malloc(READ_BUFFER);
@@ -1393,6 +1436,7 @@ void parseConfigFile(char * filename)
   else
     {
       printf("ERROR: Cannot find the file %s. Please check your local directory.\n", filename);
+      return -1;
     }
 
   close(fd);
@@ -1408,6 +1452,7 @@ void parseConfigFile(char * filename)
     printf("Password: %s\n",password);
   */
   ////
+    return 1;
 }
 
 
@@ -1422,7 +1467,9 @@ int main(int argc, char **argv)
 
 
 	
-  parseConfigFile(argv[1]);
+  if(parseConfigFile(argv[1]) == -1)
+    exit(EXIT_FAILURE);
+
   resetCompleteness();
 
   for(int i = 0; i<SERVERS; i++)
@@ -1430,10 +1477,6 @@ int main(int argc, char **argv)
     sendOrder[i] = i+1;
   }
 
-  //splitFile("wine3.jpg");	
-  //splitFile("foo1");
-
-  //combineFiles();
   runClient();
 
   return 0;
