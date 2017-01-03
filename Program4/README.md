@@ -8,4 +8,4 @@ HTTP 1.0 Proxy functions:
 * Browser has to be set up to use localhost at the given port to receive the HTTP requests.
 
 Web cache:
-* Cache contents for the given timeout. 
+* Cache contents for the given timeout.  
